@@ -22,7 +22,7 @@ class Mimic(gl.Contract):
 
     # ── helpers (not decorated; ignored by schema) ───────────────────────────
 
-    def _bank(self) -> list:
+    def _bank(self):
         return [
             "I told my plant a joke. It didn't leaf an impression.",
             "I'm reading a book on anti-gravity. It's impossible to put down.",
