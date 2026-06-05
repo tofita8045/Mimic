@@ -1,12 +1,8 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 # Mimic — a fully on-chain "Human or AI?" guessing game on GenLayer.
-#
-# IMPORTANT (Studio schema): every @gl.public.view returns a SCALAR type
-# (str / int / bool) only. Aggregate data is returned as a JSON-encoded string,
-# because bare `dict` / `list` return annotations break Studio schema loading.
-#
-# Optimistic Democracy: AI validators reach consensus on the LLM JSON output via
-# gl.eq_principle.prompt_comparative.
+# Built on the exact minimal structure proven to load in Studio:
+# only TreeMap[str, str] storage, explicit TreeMap() init, no helper methods,
+# no module-level data, no lambdas, scalar (str/int/bool) view returns.
 from genlayer import *
 
 import json
@@ -20,10 +16,12 @@ class Mimic(gl.Contract):
         self.rounds = TreeMap()
         self.stats = TreeMap()
 
-    # ── helpers (not decorated; ignored by schema) ───────────────────────────
+    @gl.public.write
+    def start_round(self, player: str, seed: str) -> None:
+        if player not in self.stats:
+            self.stats[player] = "0,0"
 
-    def _bank(self):
-        return [
+        bank = [
             "I told my plant a joke. It didn't leaf an impression.",
             "I'm reading a book on anti-gravity. It's impossible to put down.",
             "Why don't scientists trust atoms? They make up everything.",
@@ -40,10 +38,8 @@ class Mimic(gl.Contract):
             "Did you hear about the claustrophobic astronaut? He just needed space.",
             "I told my wife she draws her eyebrows too high. She looked surprised.",
         ]
-
-    def _pick(self, seed: str) -> str:
-        bank = self._bank()
         n = len(bank)
+
         prompt = (
             'You run a "Human or AI?" guessing game. '
             'Flip a fair coin to pick a persona, then return ONLY JSON in this exact shape: '
@@ -58,39 +54,31 @@ class Mimic(gl.Contract):
             'Output JSON only, no prose, no code fences.'
         )
 
-        def check():
-            r = gl.nondet.exec_prompt(prompt)
-            return r.replace("```json", "").replace("```", "").strip()
+        def nondet() -> str:
+            r = gl.nondet.exec_prompt(prompt).replace("```json", "").replace("```", "")
+            return r.strip()
 
-        result = gl.eq_principle.prompt_comparative(
-            check,
+        raw = gl.eq_principle.prompt_comparative(
+            nondet,
             "Both responses must agree on the persona (human or ai).",
         )
-        data = json.loads(result)
-        persona = data.get("persona", "")
+        data = json.loads(raw)
+
+        persona = data["persona"]
         if persona == "human":
-            idx = data.get("index", 0)
-            if not isinstance(idx, int) or idx < 0 or idx >= n:
+            idx = data["index"]
+            if idx < 0 or idx >= n:
                 idx = 0
-            return json.dumps({"persona": "human", "sentence": bank[idx]})
-        if persona == "ai":
-            s = data.get("ai_sentence", "")
-            if not isinstance(s, str) or len(s.strip()) < 5:
-                raise Exception("LLM returned invalid ai_sentence")
-            return json.dumps({"persona": "ai", "sentence": s.strip()})
-        raise Exception("LLM returned invalid persona")
+            sentence = bank[idx]
+        else:
+            persona = "ai"
+            sentence = str(data["ai_sentence"]).strip()
+            if len(sentence) < 5:
+                sentence = "Honestly, I'm just here vibing and pretending to be human."
 
-    # ── writes ───────────────────────────────────────────────────────────────
-
-    @gl.public.write
-    def start_round(self, player: str, seed: str) -> None:
-        if player not in self.stats:
-            self.stats[player] = "0,0"
-
-        picked = json.loads(self._pick(seed))
         state = {
-            "persona": picked["persona"],
-            "sentence": picked["sentence"],
+            "persona": persona,
+            "sentence": sentence,
             "resolved": False,
             "correct": False,
             "guess": "",
@@ -106,12 +94,10 @@ class Mimic(gl.Contract):
             raise Exception("No active round. Call start_round first.")
 
         state = json.loads(self.rounds[player])
-        if state.get("resolved"):
+        if state["resolved"]:
             raise Exception("Already resolved.")
 
-        secret = state.get("persona", "")
-        correct = normalized == secret
-
+        correct = normalized == state["persona"]
         state["guess"] = normalized
         state["correct"] = correct
         state["resolved"] = True
@@ -119,27 +105,27 @@ class Mimic(gl.Contract):
 
         parts = self.stats.get(player, "0,0").split(",")
         wins = int(parts[0])
-        losses = int(parts[1]) if len(parts) > 1 else 0
+        losses = int(parts[1])
         if correct:
             wins = wins + 1
         else:
             losses = losses + 1
         self.stats[player] = f"{wins},{losses}"
 
-    # ── views: SCALAR returns only (str / int / bool) ────────────────────────
-
     @gl.public.view
     def get_my_round(self, player: str) -> str:
         if player not in self.rounds:
             return '{"active": false}'
         state = json.loads(self.rounds[player])
-        revealed = state.get("persona", "") if state.get("resolved") else ""
+        revealed = ""
+        if state["resolved"]:
+            revealed = state["persona"]
         out = {
             "active": True,
-            "sentence": state.get("sentence", ""),
-            "resolved": bool(state.get("resolved", False)),
-            "correct": bool(state.get("correct", False)),
-            "guess": state.get("guess", ""),
+            "sentence": state["sentence"],
+            "resolved": state["resolved"],
+            "correct": state["correct"],
+            "guess": state["guess"],
             "persona": revealed,
         }
         return json.dumps(out)
@@ -147,9 +133,7 @@ class Mimic(gl.Contract):
     @gl.public.view
     def get_score(self, player: str) -> int:
         parts = self.stats.get(player, "0,0").split(",")
-        wins = int(parts[0])
-        losses = int(parts[1]) if len(parts) > 1 else 0
-        return wins * 10 - losses * 5
+        return int(parts[0]) * 10 - int(parts[1]) * 5
 
     @gl.public.view
     def get_stats(self, player: str) -> str:
@@ -161,19 +145,18 @@ class Mimic(gl.Contract):
         for k, v in self.stats.items():
             parts = v.split(",")
             wins = int(parts[0])
-            losses = int(parts[1]) if len(parts) > 1 else 0
+            losses = int(parts[1])
             score = wins * 10 - losses * 5
             short = k[:6] + "..." + k[-4:] if len(k) > 10 else k
-            rows.append({
-                "player": short,
-                "address": k,
-                "wins": wins,
-                "losses": losses,
-                "score": score,
-            })
-        rows.sort(key=lambda x: -x["score"])
-        return json.dumps(rows[:50])
-
-    @gl.public.view
-    def get_bank_size(self) -> int:
-        return len(self._bank())
+            rows.append({"player": short, "address": k, "wins": wins, "losses": losses, "score": score})
+        # Manual sort by score desc (no lambda).
+        i = 1
+        while i < len(rows):
+            j = i
+            while j > 0 and rows[j]["score"] > rows[j - 1]["score"]:
+                tmp = rows[j]
+                rows[j] = rows[j - 1]
+                rows[j - 1] = tmp
+                j = j - 1
+            i = i + 1
+        return json.dumps(rows)
