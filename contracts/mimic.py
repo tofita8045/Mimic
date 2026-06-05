@@ -1,8 +1,9 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 # Mimic — a fully on-chain "Human or AI?" guessing game on GenLayer.
-# Built on the exact minimal structure proven to load in Studio:
-# only TreeMap[str, str] storage, explicit TreeMap() init, no helper methods,
-# no module-level data, no lambdas, scalar (str/int/bool) view returns.
+#
+# NOTE: TreeMap.items() iteration breaks the Studio schema loader, so the
+# leaderboard is built client-side: the contract tracks players in a DynArray and
+# exposes get_player_count / get_player_at, and the frontend reads each score.
 from genlayer import *
 
 import json
@@ -11,6 +12,7 @@ import json
 class Mimic(gl.Contract):
     rounds: TreeMap[str, str]    # player -> JSON {persona, sentence, resolved, correct, guess}
     stats: TreeMap[str, str]     # player -> "wins,losses"
+    players: DynArray[str]       # every player who has started a round (for the leaderboard)
 
     def __init__(self) -> None:
         self.rounds = TreeMap()
@@ -20,6 +22,7 @@ class Mimic(gl.Contract):
     def start_round(self, player: str, seed: str) -> None:
         if player not in self.stats:
             self.stats[player] = "0,0"
+            self.players.append(player)
 
         bank = [
             "I told my plant a joke. It didn't leaf an impression.",
@@ -55,8 +58,7 @@ class Mimic(gl.Contract):
         )
 
         def nondet() -> str:
-            r = gl.nondet.exec_prompt(prompt).replace("```json", "").replace("```", "")
-            return r.strip()
+            return gl.nondet.exec_prompt(prompt).replace("```json", "").replace("```", "").strip()
 
         raw = gl.eq_principle.prompt_comparative(
             nondet,
@@ -140,23 +142,11 @@ class Mimic(gl.Contract):
         return self.stats.get(player, "0,0")
 
     @gl.public.view
-    def get_leaderboard(self) -> str:
-        rows = []
-        for k, v in self.stats.items():
-            parts = v.split(",")
-            wins = int(parts[0])
-            losses = int(parts[1])
-            score = wins * 10 - losses * 5
-            short = k[:6] + "..." + k[-4:] if len(k) > 10 else k
-            rows.append({"player": short, "address": k, "wins": wins, "losses": losses, "score": score})
-        # Manual sort by score desc (no lambda).
-        i = 1
-        while i < len(rows):
-            j = i
-            while j > 0 and rows[j]["score"] > rows[j - 1]["score"]:
-                tmp = rows[j]
-                rows[j] = rows[j - 1]
-                rows[j - 1] = tmp
-                j = j - 1
-            i = i + 1
-        return json.dumps(rows)
+    def get_player_count(self) -> int:
+        return len(self.players)
+
+    @gl.public.view
+    def get_player_at(self, idx: int) -> str:
+        if idx < 0 or idx >= len(self.players):
+            return ""
+        return self.players[idx]
