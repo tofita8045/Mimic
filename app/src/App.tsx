@@ -104,8 +104,10 @@ export default function App() {
 
   async function handleStart() {
     if (!account || !contractAddress || !clientRef.current) return;
+    // Use the wallet address itself as a per-player flavor seed for the LLM.
+    const seed = account.slice(2, 10);
     await withBusy(async () => {
-      await startRound(clientRef.current!, contractAddress);
+      await startRound(clientRef.current!, contractAddress, seed);
       await refresh();
     });
   }
