@@ -6,6 +6,7 @@ import {
   LeaderboardRow,
   RoundView,
   clearSavedAddress,
+  deployContract,
   getLeaderboard,
   getMyRound,
   getSavedAddress,
@@ -14,6 +15,7 @@ import {
   setSavedAddress,
   startRound,
 } from "./contract";
+import { MIMIC_SOURCE } from "./contractSource";
 import WalletBar from "./components/WalletBar";
 import Hero from "./components/Hero";
 import RoundScreen from "./components/RoundScreen";
@@ -87,6 +89,16 @@ export default function App() {
     setBoard([]);
   }
 
+  async function handleDeploy() {
+    if (!account || !clientRef.current) return;
+    await withBusy(async () => {
+      const addr = await deployContract(clientRef.current!, MIMIC_SOURCE);
+      setSavedAddress(addr);
+      setContractAddress(addr);
+      await refresh();
+    });
+  }
+
   async function withBusy<T>(fn: () => Promise<T>): Promise<T | undefined> {
     setBusy(true);
     setError(null);
@@ -152,17 +164,27 @@ export default function App() {
       {!contractAddress && (
         <div className="banner">
           <span>
-            <strong>Setup:</strong> deploy <code>contracts/mimic.py</code> in
-            <a href="https://studio.genlayer.com" target="_blank" rel="noreferrer"> GenLayer Studio</a>,
-            then paste the contract address.
+            <strong>One-time setup:</strong> deploy the Mimic contract to GenLayer Studionet,
+            then start playing. No Studio UI needed — your wallet signs the deploy.
           </span>
-          <input
-            className="input"
-            placeholder="0x…"
-            value={addressInput}
-            onChange={(e) => setAddressInput(e.target.value)}
-          />
-          <button onClick={saveContractAddress}>Save</button>
+          <button className="cta" onClick={handleDeploy} disabled={!account || busy}>
+            {busy ? <span className="spinner" /> : null}
+            {account ? "Deploy contract" : "Connect wallet first"}
+          </button>
+          <details style={{ width: "100%", marginTop: 6 }}>
+            <summary className="muted" style={{ cursor: "pointer" }}>
+              Already deployed? Paste the address.
+            </summary>
+            <div className="row" style={{ marginTop: 8 }}>
+              <input
+                className="input col"
+                placeholder="0x…"
+                value={addressInput}
+                onChange={(e) => setAddressInput(e.target.value)}
+              />
+              <button onClick={saveContractAddress}>Save</button>
+            </div>
+          </details>
         </div>
       )}
 

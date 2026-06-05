@@ -1,13 +1,7 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 # Mimic — a fully on-chain "Human or AI?" guessing game on GenLayer.
-#
-# Single TreeMap[str, str] store with prefixed keys (the most schema-friendly
-# layout for Studio). Views return scalars (str / int) only.
-#
-#   "round:<player>"  -> public round JSON (persona hidden until resolved)
-#   "secret:<player>" -> the secret persona ("human" | "ai")
-#   "stat:<player>"   -> "wins,losses"
-#   "roster"          -> newline-separated list of player addresses
+# Storage is a single TreeMap[str, str] with prefixed keys, and views return
+# only scalar types — both required to satisfy the Studio schema loader.
 from genlayer import *
 
 import json
@@ -21,9 +15,8 @@ class Mimic(gl.Contract):
 
     @gl.public.write
     def start_round(self, player: str, seed: str) -> None:
-        stat_key = "stat:" + player
-        if stat_key not in self.store:
-            self.store[stat_key] = "0,0"
+        if "stat:" + player not in self.store:
+            self.store["stat:" + player] = "0,0"
             roster = self.store.get("roster", "")
             if roster == "":
                 self.store["roster"] = player
@@ -67,8 +60,7 @@ class Mimic(gl.Contract):
             return gl.nondet.exec_prompt(prompt).replace("```json", "").replace("```", "").strip()
 
         raw = gl.eq_principle.prompt_comparative(
-            nondet,
-            "Both responses must agree on the persona (human or ai).",
+            nondet, "Both responses must agree on the persona (human or ai)."
         )
         data = json.loads(raw)
 
@@ -100,11 +92,10 @@ class Mimic(gl.Contract):
         normalized = guess.strip().lower()
         if normalized != "human" and normalized != "ai":
             raise Exception('guess must be "human" or "ai"')
-        round_key = "round:" + player
-        if round_key not in self.store:
+        if "round:" + player not in self.store:
             raise Exception("No active round. Call start_round first.")
 
-        public = json.loads(self.store[round_key])
+        public = json.loads(self.store["round:" + player])
         if public["resolved"]:
             raise Exception("Already resolved.")
 
@@ -115,7 +106,7 @@ class Mimic(gl.Contract):
         public["correct"] = correct
         public["resolved"] = True
         public["persona"] = secret
-        self.store[round_key] = json.dumps(public)
+        self.store["round:" + player] = json.dumps(public)
 
         parts = self.store.get("stat:" + player, "0,0").split(",")
         wins = int(parts[0])
@@ -128,10 +119,10 @@ class Mimic(gl.Contract):
 
     @gl.public.view
     def get_my_round(self, player: str) -> str:
-        round_key = "round:" + player
-        if round_key not in self.store:
+        key = "round:" + player
+        if key not in self.store:
             return '{"active": false}'
-        return self.store[round_key]
+        return self.store[key]
 
     @gl.public.view
     def get_score(self, player: str) -> int:
