@@ -16,7 +16,8 @@ export interface RoundView {
 }
 
 export interface LeaderboardRow {
-  player: string;
+  player: string;       // shortened display label
+  address: string;      // full wallet address
   score: number;
 }
 
@@ -56,26 +57,19 @@ async function writeAndWait(
 export async function startRound(
   client: GenLayerClient<any>,
   address: Address,
+  player: Address,
   seed: string,
 ) {
-  return writeAndWait(client, address, "start_round", [seed]);
+  return writeAndWait(client, address, "start_round", [player, seed]);
 }
 
 export async function makeGuess(
   client: GenLayerClient<any>,
   address: Address,
+  player: Address,
   guess: "human" | "ai",
 ) {
-  return writeAndWait(client, address, "make_guess", [guess]);
-}
-
-function safeParse<T>(raw: unknown, fallback: T): T {
-  if (typeof raw !== "string") return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+  return writeAndWait(client, address, "make_guess", [player, guess]);
 }
 
 export async function getMyRound(
@@ -83,12 +77,12 @@ export async function getMyRound(
   address: Address,
   player: Address,
 ): Promise<RoundView> {
-  const raw = await client.readContract({
+  const v = (await client.readContract({
     address,
     functionName: "get_my_round",
     args: [player],
-  });
-  return safeParse<RoundView>(raw, { active: false });
+  })) as unknown;
+  return (v as RoundView) ?? { active: false };
 }
 
 export async function getScore(
@@ -108,10 +102,10 @@ export async function getLeaderboard(
   client: GenLayerClient<any>,
   address: Address,
 ): Promise<LeaderboardRow[]> {
-  const raw = await client.readContract({
+  const rows = (await client.readContract({
     address,
     functionName: "get_leaderboard",
     args: [],
-  });
-  return safeParse<LeaderboardRow[]>(raw, []);
+  })) as unknown;
+  return (rows as LeaderboardRow[] | null) ?? [];
 }

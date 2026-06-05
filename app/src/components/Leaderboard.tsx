@@ -26,11 +26,11 @@ export default function Leaderboard({ rows, me }: Props) {
           </thead>
           <tbody>
             {rows.map((row, i) => {
-              const isMe = me && row.player.toLowerCase() === me.toLowerCase();
+              const isMe = me && row.address.toLowerCase() === me.toLowerCase();
               return (
-                <tr key={row.player} className={isMe ? "me" : ""}>
+                <tr key={row.address} className={isMe ? "me" : ""}>
                   <td>{i + 1}</td>
-                  <td className="mono">{shorten(row.player)}{isMe ? " · you" : ""}</td>
+                  <td className="mono">{row.player}{isMe ? " · you" : ""}</td>
                   <td className="score">{row.score}</td>
                 </tr>
               );
