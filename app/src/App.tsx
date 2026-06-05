@@ -118,7 +118,7 @@ export default function App() {
     if (!account || !contractAddress || !clientRef.current) return;
     const seed = account.slice(2, 10);
     await withBusy(async () => {
-      await startRound(clientRef.current!, contractAddress, account, seed);
+      await startRound(clientRef.current!, contractAddress, seed);
       await refresh();
     });
   }
@@ -126,7 +126,7 @@ export default function App() {
   async function handleGuess(g: "human" | "ai") {
     if (!account || !contractAddress || !clientRef.current) return;
     await withBusy(async () => {
-      await makeGuess(clientRef.current!, contractAddress, account, g);
+      await makeGuess(clientRef.current!, contractAddress, g);
       await refresh();
     });
   }

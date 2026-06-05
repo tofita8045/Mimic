@@ -1,5 +1,5 @@
 // Typed wrappers around the Mimic Intelligent Contract.
-import type { GenLayerClient, GenLayerChain, DecodedDeployData, TransactionHash } from "genlayer-js/types";
+import type { GenLayerClient, TransactionHash, DecodedDeployData, GenLayerChain } from "genlayer-js/types";
 import { TransactionStatus } from "./genlayer";
 
 const STORAGE_KEY = "mimic.contractAddress";
@@ -47,13 +47,8 @@ function toNumber(v: unknown): number {
   return 0;
 }
 
-function safeParse<T>(raw: unknown, fallback: T): T {
-  if (typeof raw !== "string") return fallback;
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+function toBool(v: unknown): boolean {
+  return v === true || v === 1 || v === "true";
 }
 
 async function writeAndWait(
@@ -82,13 +77,12 @@ export async function deployContract(
 ): Promise<Address> {
   await client.connect("studionet");
 
-  // Skip optional consensus init if the SDK build doesn't expose it on Studionet.
   const init = (client as any).initializeConsensusSmartContract;
   if (typeof init === "function") {
     try {
       await init.call(client);
     } catch {
-      /* ignore — already initialized on shared Studionet */
+      /* already initialized on shared Studionet */
     }
   }
 
@@ -101,12 +95,9 @@ export async function deployContract(
     retries: 200,
   });
 
-  const chainId = (client.chain as GenLayerChain).id;
-  // Studionet returns the address in receipt.data.contract_address
-  // (testnet bradbury exposes it via txDataDecoded).
   const fromData = (receipt as any).data?.contract_address as string | undefined;
   const fromTx = ((receipt as any).txDataDecoded as DecodedDeployData | undefined)?.contractAddress;
-  const deployedAt = (chainId !== 4221 ? fromData : fromTx) ?? fromData ?? fromTx;
+  const deployedAt = fromData ?? fromTx;
 
   if (!deployedAt) {
     throw new Error("Deployed but couldn't read the contract address from the receipt.");
@@ -117,19 +108,26 @@ export async function deployContract(
 export async function startRound(
   client: GenLayerClient<any>,
   address: Address,
-  player: Address,
   seed: string,
 ) {
-  return writeAndWait(client, address, "start_round", [player, seed]);
+  return writeAndWait(client, address, "start_round", [seed]);
 }
 
 export async function makeGuess(
   client: GenLayerClient<any>,
   address: Address,
-  player: Address,
   guess: "human" | "ai",
 ) {
-  return writeAndWait(client, address, "make_guess", [player, guess]);
+  return writeAndWait(client, address, "make_guess", [guess]);
+}
+
+async function readView(
+  client: GenLayerClient<any>,
+  address: Address,
+  functionName: string,
+  args: unknown[] = [],
+): Promise<unknown> {
+  return client.readContract({ address, functionName, args: args as any });
 }
 
 export async function getMyRound(
@@ -137,12 +135,23 @@ export async function getMyRound(
   address: Address,
   player: Address,
 ): Promise<RoundView> {
-  const raw = await client.readContract({
-    address,
-    functionName: "get_my_round",
-    args: [player],
-  });
-  return safeParse<RoundView>(raw, { active: false });
+  const [active, resolved, sentence, persona, guess, correct] = await Promise.all([
+    readView(client, address, "get_active", [player]),
+    readView(client, address, "get_resolved", [player]),
+    readView(client, address, "get_sentence", [player]),
+    readView(client, address, "get_persona_revealed", [player]),
+    readView(client, address, "get_guess", [player]),
+    readView(client, address, "get_correct", [player]),
+  ]);
+
+  return {
+    active: toBool(active),
+    resolved: toBool(resolved),
+    sentence: typeof sentence === "string" ? sentence : "",
+    persona: typeof persona === "string" ? persona : "",
+    guess: typeof guess === "string" ? guess : "",
+    correct: toBool(correct),
+  };
 }
 
 export async function getScore(
@@ -150,57 +159,28 @@ export async function getScore(
   address: Address,
   player: Address,
 ): Promise<number> {
-  return toNumber(
-    await client.readContract({
-      address,
-      functionName: "get_score",
-      args: [player],
-    }),
-  );
-}
-
-async function getStats(
-  client: GenLayerClient<any>,
-  address: Address,
-  player: string,
-): Promise<{ wins: number; losses: number }> {
-  const raw = (await client.readContract({
-    address,
-    functionName: "get_stats",
-    args: [player],
-  })) as unknown;
-  const s = typeof raw === "string" ? raw : "0,0";
-  const [w, l] = s.split(",");
-  return { wins: parseInt(w, 10) || 0, losses: parseInt(l, 10) || 0 };
+  return toNumber(await readView(client, address, "get_score", [player]));
 }
 
 export async function getLeaderboard(
   client: GenLayerClient<any>,
   address: Address,
 ): Promise<LeaderboardRow[]> {
-  const rosterRaw = (await client.readContract({
-    address,
-    functionName: "get_roster",
-    args: [],
-  })) as unknown;
-  const roster = typeof rosterRaw === "string" ? rosterRaw.trim() : "";
-  if (!roster) return [];
-  const addresses = roster.split("\n").filter(Boolean);
-
-  const stats = await Promise.all(
-    addresses.map((addr) => getStats(client, address, addr)),
-  );
-
-  return addresses
-    .map<LeaderboardRow>((addr, i) => {
-      const s = stats[i];
+  const raw = (await readView(client, address, "get_leaderboard", [])) as unknown;
+  if (!Array.isArray(raw)) return [];
+  return (raw as unknown[])
+    .map((entry): LeaderboardRow | null => {
+      if (!Array.isArray(entry) || entry.length < 4) return null;
+      const [addr, wins, losses, score] = entry as [unknown, unknown, unknown, unknown];
+      if (typeof addr !== "string") return null;
       return {
         player: shorten(addr),
         address: addr,
-        wins: s.wins,
-        losses: s.losses,
-        score: s.wins * 10 - s.losses * 5,
+        wins: toNumber(wins),
+        losses: toNumber(losses),
+        score: toNumber(score),
       };
     })
+    .filter((r): r is LeaderboardRow => r !== null)
     .sort((a, b) => b.score - a.score);
 }
