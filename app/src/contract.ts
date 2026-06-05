@@ -98,7 +98,6 @@ export async function getMyRound(
     functionName: "get_my_round",
     args: [player],
   });
-  if (raw && typeof raw === "object") return raw as unknown as RoundView;
   return safeParse<RoundView>(raw, { active: false });
 }
 
@@ -116,8 +115,7 @@ export async function getScore(
   );
 }
 
-/** Read the leaderboard. The contract returns a list; genlayer-js may surface it as an
- *  array or (defensively) a JSON string — handle both. */
+/** Read the leaderboard (the contract returns a JSON string, sorted by score desc). */
 export async function getLeaderboard(
   client: GenLayerClient<any>,
   address: Address,
@@ -127,6 +125,5 @@ export async function getLeaderboard(
     functionName: "get_leaderboard",
     args: [],
   });
-  if (Array.isArray(raw)) return raw as unknown as LeaderboardRow[];
   return safeParse<LeaderboardRow[]>(raw, []);
 }

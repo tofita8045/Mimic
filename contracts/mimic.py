@@ -1,9 +1,9 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 # Mimic — a fully on-chain "Human or AI?" guessing game on GenLayer.
 #
-# Structure mirrors a proven Studio contract: TreeMap[str, str] storage only,
-# explicit TreeMap() init, no module-level data, no DynArray. The human-written
-# sentence bank lives inside a helper method as a local tuple.
+# IMPORTANT (Studio schema): every @gl.public.view returns a SCALAR type
+# (str / int / bool) only. Aggregate data is returned as a JSON-encoded string,
+# because bare `dict` / `list` return annotations break Studio schema loading.
 #
 # Optimistic Democracy: AI validators reach consensus on the LLM JSON output via
 # gl.eq_principle.prompt_comparative.
@@ -20,7 +20,7 @@ class Mimic(gl.Contract):
         self.rounds = TreeMap()
         self.stats = TreeMap()
 
-    # ── helpers (not decorated) ──────────────────────────────────────────────
+    # ── helpers (not decorated; ignored by schema) ───────────────────────────
 
     def _bank(self) -> list:
         return [
@@ -126,15 +126,15 @@ class Mimic(gl.Contract):
             losses = losses + 1
         self.stats[player] = f"{wins},{losses}"
 
-    # ── views ────────────────────────────────────────────────────────────────
+    # ── views: SCALAR returns only (str / int / bool) ────────────────────────
 
     @gl.public.view
-    def get_my_round(self, player: str) -> dict:
+    def get_my_round(self, player: str) -> str:
         if player not in self.rounds:
-            return {"active": False}
+            return '{"active": false}'
         state = json.loads(self.rounds[player])
         revealed = state.get("persona", "") if state.get("resolved") else ""
-        return {
+        out = {
             "active": True,
             "sentence": state.get("sentence", ""),
             "resolved": bool(state.get("resolved", False)),
@@ -142,6 +142,7 @@ class Mimic(gl.Contract):
             "guess": state.get("guess", ""),
             "persona": revealed,
         }
+        return json.dumps(out)
 
     @gl.public.view
     def get_score(self, player: str) -> int:
@@ -151,7 +152,11 @@ class Mimic(gl.Contract):
         return wins * 10 - losses * 5
 
     @gl.public.view
-    def get_leaderboard(self) -> list:
+    def get_stats(self, player: str) -> str:
+        return self.stats.get(player, "0,0")
+
+    @gl.public.view
+    def get_leaderboard(self) -> str:
         rows = []
         for k, v in self.stats.items():
             parts = v.split(",")
@@ -167,7 +172,7 @@ class Mimic(gl.Contract):
                 "score": score,
             })
         rows.sort(key=lambda x: -x["score"])
-        return rows[:50]
+        return json.dumps(rows[:50])
 
     @gl.public.view
     def get_bank_size(self) -> int:
