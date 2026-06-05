@@ -15,7 +15,6 @@ from genlayer import *
 @allow_storage
 @dataclass
 class Round:
-    player: Address
     persona: str        # "human" | "ai" — secret until resolved
     sentence: str       # the one-liner shown to the player
     resolved: bool
@@ -23,9 +22,28 @@ class Round:
     guess: str          # "human" | "ai" | "" before guessing
 
 
-# A small bank of human-written funny one-liners. These are deterministic strings
-# stored on-chain at deploy time so validators can verify any "human" pick by index.
-HUMAN_BANK: list[str] = [
+@allow_storage
+@dataclass
+class RoundView:
+    """View returned by `get_my_round`. `active=False` means no round exists yet."""
+    active: bool
+    sentence: str
+    resolved: bool
+    correct: bool
+    guess: str
+    persona: str        # "" until the round is resolved
+
+
+@allow_storage
+@dataclass
+class LeaderboardRow:
+    player: str
+    score: i32
+
+
+# A small bank of human-written funny one-liners, defined as a tuple (immutable
+# Python literal — list/dict are forbidden inside contract code by GenVM).
+HUMAN_BANK = (
     "I told my plant a joke. It didn't leaf an impression.",
     "I'm reading a book on anti-gravity. It's impossible to put down.",
     "Why don't scientists trust atoms? They make up everything.",
@@ -46,7 +64,7 @@ HUMAN_BANK: list[str] = [
     "The early bird might get the worm, but the second mouse gets the cheese.",
     "I have a fear of speed bumps. I'm slowly getting over it.",
     "Did you hear about the claustrophobic astronaut? He just needed a little space.",
-]
+)
 
 
 class Mimic(gl.Contract):
@@ -120,7 +138,6 @@ class Mimic(gl.Contract):
             sentence = result['ai_sentence'].strip()
 
         self.rounds[player] = Round(
-            player=player,
             persona=persona,
             sentence=sentence,
             resolved=False,
@@ -153,30 +170,43 @@ class Mimic(gl.Contract):
 
     # ---- views ----------------------------------------------------------------
     @gl.public.view
-    def get_my_round(self, player: Address) -> dict:
+    def get_my_round(self, player: Address) -> RoundView:
         r = self.rounds.get(player)
         if r is None:
-            return {'active': False}
-        return {
-            'active': True,
-            'sentence': r.sentence,
-            'resolved': r.resolved,
-            'correct': r.correct,
-            'guess': r.guess,
+            return RoundView(
+                active=False,
+                sentence='',
+                resolved=False,
+                correct=False,
+                guess='',
+                persona='',
+            )
+        return RoundView(
+            active=True,
+            sentence=r.sentence,
+            resolved=r.resolved,
+            correct=r.correct,
+            guess=r.guess,
             # Persona stays secret until the round is resolved.
-            'persona': r.persona if r.resolved else '',
-        }
+            persona=r.persona if r.resolved else '',
+        )
 
     @gl.public.view
     def get_score(self, player: Address) -> int:
         return int(self.scores.get(player, i32(0)))
 
     @gl.public.view
-    def get_leaderboard(self) -> list:
-        board = []
+    def get_leaderboard(self) -> DynArray[LeaderboardRow]:
+        board: DynArray[LeaderboardRow] = DynArray[LeaderboardRow]()
         for addr in self.players:
-            board.append({'player': str(addr), 'score': int(self.scores[addr])})
-        board.sort(key=lambda row: row['score'], reverse=True)
+            board.append(LeaderboardRow(player=str(addr), score=self.scores[addr]))
+        # Insertion sort by score desc (small list, one entry per player).
+        n = len(board)
+        for i in range(1, n):
+            j = i
+            while j > 0 and int(board[j].score) > int(board[j - 1].score):
+                board[j], board[j - 1] = board[j - 1], board[j]
+                j -= 1
         return board
 
     @gl.public.view
