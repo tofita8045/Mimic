@@ -1,35 +1,15 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 # Mimic — a fully on-chain "Human or AI?" guessing game on GenLayer.
 #
-# Modeled on the proven contract structure: TreeMap[str, str] storage only,
-# explicit TreeMap() init, no DynArray, no appends in __init__. The human-written
-# sentence bank is a module-level tuple, indexed directly (not stored on-chain).
+# Structure mirrors a proven Studio contract: TreeMap[str, str] storage only,
+# explicit TreeMap() init, no module-level data, no DynArray. The human-written
+# sentence bank lives inside a helper method as a local tuple.
 #
-# Optimistic Democracy: AI validators reach consensus on the LLM JSON output
-# (gl.eq_principle.prompt_comparative + json parse).
+# Optimistic Democracy: AI validators reach consensus on the LLM JSON output via
+# gl.eq_principle.prompt_comparative.
 from genlayer import *
 
 import json
-
-
-# Human-written one-liners. Module-level tuple (immutable), accessed by index.
-HUMAN_BANK = (
-    "I told my plant a joke. It didn't leaf an impression.",
-    "I'm reading a book on anti-gravity. It's impossible to put down.",
-    "Why don't scientists trust atoms? They make up everything.",
-    "Parallel lines have so much in common. It's a shame they'll never meet.",
-    "My wallet is like an onion. Opening it makes me cry.",
-    "I used to play piano by ear, now I use my hands.",
-    "Time flies like an arrow. Fruit flies like a banana.",
-    "I'm on a seafood diet. I see food and I eat it.",
-    "Why did the scarecrow win an award? He was outstanding in his field.",
-    "My boss told me to have a good day, so I went home.",
-    "I tried to sue the airline for losing my luggage. I lost my case.",
-    "The early bird gets the worm, but the second mouse gets the cheese.",
-    "I have a fear of speed bumps. I am slowly getting over it.",
-    "Did you hear about the claustrophobic astronaut? He just needed space.",
-    "I told my wife she draws her eyebrows too high. She looked surprised.",
-)
 
 
 class Mimic(gl.Contract):
@@ -40,12 +20,30 @@ class Mimic(gl.Contract):
         self.rounds = TreeMap()
         self.stats = TreeMap()
 
-    @gl.public.write
-    def start_round(self, player: str, seed: str) -> None:
-        if player not in self.stats:
-            self.stats[player] = "0,0"
+    # ── helpers (not decorated) ──────────────────────────────────────────────
 
-        n = len(HUMAN_BANK)
+    def _bank(self) -> list:
+        return [
+            "I told my plant a joke. It didn't leaf an impression.",
+            "I'm reading a book on anti-gravity. It's impossible to put down.",
+            "Why don't scientists trust atoms? They make up everything.",
+            "Parallel lines have so much in common. It's a shame they'll never meet.",
+            "My wallet is like an onion. Opening it makes me cry.",
+            "I used to play piano by ear, now I use my hands.",
+            "Time flies like an arrow. Fruit flies like a banana.",
+            "I'm on a seafood diet. I see food and I eat it.",
+            "Why did the scarecrow win an award? He was outstanding in his field.",
+            "My boss told me to have a good day, so I went home.",
+            "I tried to sue the airline for losing my luggage. I lost my case.",
+            "The early bird gets the worm, but the second mouse gets the cheese.",
+            "I have a fear of speed bumps. I am slowly getting over it.",
+            "Did you hear about the claustrophobic astronaut? He just needed space.",
+            "I told my wife she draws her eyebrows too high. She looked surprised.",
+        ]
+
+    def _pick(self, seed: str) -> str:
+        bank = self._bank()
+        n = len(bank)
         prompt = (
             'You run a "Human or AI?" guessing game. '
             'Flip a fair coin to pick a persona, then return ONLY JSON in this exact shape: '
@@ -56,7 +54,7 @@ class Mimic(gl.Contract):
             'and ai_sentence is the empty string "". '
             'If persona is "ai": write a short, witty, original one-liner '
             '(max 25 words, plain English, no quotes, no labels, no emojis), and set index to 0. '
-            f'Player flavor seed (do not include literally): {seed}. '
+            f'Player seed for flavor (do not include literally): {seed}. '
             'Output JSON only, no prose, no code fences.'
         )
 
@@ -70,23 +68,29 @@ class Mimic(gl.Contract):
         )
         data = json.loads(result)
         persona = data.get("persona", "")
-        sentence = ""
         if persona == "human":
             idx = data.get("index", 0)
             if not isinstance(idx, int) or idx < 0 or idx >= n:
                 idx = 0
-            sentence = HUMAN_BANK[idx]
-        elif persona == "ai":
+            return json.dumps({"persona": "human", "sentence": bank[idx]})
+        if persona == "ai":
             s = data.get("ai_sentence", "")
             if not isinstance(s, str) or len(s.strip()) < 5:
                 raise Exception("LLM returned invalid ai_sentence")
-            sentence = s.strip()
-        else:
-            raise Exception("LLM returned invalid persona")
+            return json.dumps({"persona": "ai", "sentence": s.strip()})
+        raise Exception("LLM returned invalid persona")
 
+    # ── writes ───────────────────────────────────────────────────────────────
+
+    @gl.public.write
+    def start_round(self, player: str, seed: str) -> None:
+        if player not in self.stats:
+            self.stats[player] = "0,0"
+
+        picked = json.loads(self._pick(seed))
         state = {
-            "persona": persona,
-            "sentence": sentence,
+            "persona": picked["persona"],
+            "sentence": picked["sentence"],
             "resolved": False,
             "correct": False,
             "guess": "",
@@ -122,13 +126,15 @@ class Mimic(gl.Contract):
             losses = losses + 1
         self.stats[player] = f"{wins},{losses}"
 
+    # ── views ────────────────────────────────────────────────────────────────
+
     @gl.public.view
-    def get_my_round(self, player: str) -> str:
+    def get_my_round(self, player: str) -> dict:
         if player not in self.rounds:
-            return '{"active": false}'
+            return {"active": False}
         state = json.loads(self.rounds[player])
         revealed = state.get("persona", "") if state.get("resolved") else ""
-        out = {
+        return {
             "active": True,
             "sentence": state.get("sentence", ""),
             "resolved": bool(state.get("resolved", False)),
@@ -136,11 +142,6 @@ class Mimic(gl.Contract):
             "guess": state.get("guess", ""),
             "persona": revealed,
         }
-        return json.dumps(out)
-
-    @gl.public.view
-    def get_stats(self, player: str) -> str:
-        return self.stats.get(player, "0,0")
 
     @gl.public.view
     def get_score(self, player: str) -> int:
@@ -150,8 +151,7 @@ class Mimic(gl.Contract):
         return wins * 10 - losses * 5
 
     @gl.public.view
-    def get_leaderboard(self) -> str:
-        """Leaderboard as a JSON string, sorted by score desc."""
+    def get_leaderboard(self) -> list:
         rows = []
         for k, v in self.stats.items():
             parts = v.split(",")
@@ -167,8 +167,8 @@ class Mimic(gl.Contract):
                 "score": score,
             })
         rows.sort(key=lambda x: -x["score"])
-        return json.dumps(rows[:50])
+        return rows[:50]
 
     @gl.public.view
     def get_bank_size(self) -> int:
-        return len(HUMAN_BANK)
+        return len(self._bank())
