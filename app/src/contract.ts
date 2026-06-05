@@ -1,4 +1,4 @@
-// Typed wrappers around the HumanOrAI Intelligent Contract.
+// Typed wrappers around the Mimic Intelligent Contract.
 import type { GenLayerClient } from "genlayer-js/types";
 import { TransactionStatus } from "./genlayer";
 
@@ -6,11 +6,9 @@ const STORAGE_KEY = "mimic.contractAddress";
 
 export type Address = `0x${string}`;
 
-export interface SessionView {
+export interface RoundView {
   active: boolean;
-  transcript?: string;
-  turns?: number;
-  max_turns?: number;
+  sentence?: string;
   resolved?: boolean;
   correct?: boolean;
   guess?: string;
@@ -55,16 +53,8 @@ async function writeAndWait(
   });
 }
 
-export async function startGame(client: GenLayerClient<any>, address: Address) {
-  return writeAndWait(client, address, "start_game", []);
-}
-
-export async function sendMessage(
-  client: GenLayerClient<any>,
-  address: Address,
-  text: string,
-) {
-  return writeAndWait(client, address, "send_message", [text]);
+export async function startRound(client: GenLayerClient<any>, address: Address) {
+  return writeAndWait(client, address, "start_round", []);
 }
 
 export async function makeGuess(
@@ -75,17 +65,17 @@ export async function makeGuess(
   return writeAndWait(client, address, "make_guess", [guess]);
 }
 
-export async function getMySession(
+export async function getMyRound(
   client: GenLayerClient<any>,
   address: Address,
   player: Address,
-): Promise<SessionView> {
+): Promise<RoundView> {
   const result = (await client.readContract({
     address,
-    functionName: "get_my_session",
+    functionName: "get_my_round",
     args: [player],
   })) as unknown;
-  return result as SessionView;
+  return result as RoundView;
 }
 
 export async function getScore(

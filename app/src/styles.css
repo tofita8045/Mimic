@@ -429,3 +429,33 @@ button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
   color: var(--muted);
   font-size: 12px;
 }
+
+
+/* ----- Quote (the sentence to judge) ------------------------------------- */
+.quote {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 28px 28px 28px 56px;
+  position: relative;
+  margin-top: 12px;
+}
+.quote .quote-mark {
+  position: absolute;
+  top: 6px;
+  left: 18px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 64px;
+  line-height: 1;
+  color: var(--accent);
+  opacity: 0.6;
+}
+.quote p {
+  margin: 0;
+  font-size: 22px;
+  line-height: 1.45;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: var(--ink);
+}
+.quote.subdued p { font-size: 18px; color: var(--ink-soft); font-weight: 500; }

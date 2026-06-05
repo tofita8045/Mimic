@@ -4,20 +4,19 @@ import { connectWallet, makeClient } from "./genlayer";
 import {
   Address,
   LeaderboardRow,
-  SessionView,
+  RoundView,
   clearSavedAddress,
   getLeaderboard,
-  getMySession,
+  getMyRound,
   getSavedAddress,
   getScore,
   makeGuess,
-  sendMessage,
   setSavedAddress,
-  startGame,
+  startRound,
 } from "./contract";
 import WalletBar from "./components/WalletBar";
 import Hero from "./components/Hero";
-import GameScreen from "./components/GameScreen";
+import RoundScreen from "./components/RoundScreen";
 import ResultCard from "./components/ResultCard";
 import Leaderboard from "./components/Leaderboard";
 
@@ -25,7 +24,7 @@ export default function App() {
   const [account, setAccount] = useState<Address | null>(null);
   const [contractAddress, setContractAddress] = useState<Address | null>(getSavedAddress());
   const [addressInput, setAddressInput] = useState<string>("");
-  const [session, setSession] = useState<SessionView | null>(null);
+  const [round, setRound] = useState<RoundView | null>(null);
   const [score, setScore] = useState<number>(0);
   const [board, setBoard] = useState<LeaderboardRow[]>([]);
   const [busy, setBusy] = useState(false);
@@ -38,13 +37,13 @@ export default function App() {
     try {
       const client = clientRef.current ?? (account ? makeClient(account) : null);
       if (!client) return;
-      const [board, s, sc] = await Promise.all([
+      const [board, r, sc] = await Promise.all([
         getLeaderboard(client, contractAddress),
-        account ? getMySession(client, contractAddress, account) : Promise.resolve(null),
+        account ? getMyRound(client, contractAddress, account) : Promise.resolve(null),
         account ? getScore(client, contractAddress, account) : Promise.resolve(0),
       ]);
       setBoard(board);
-      setSession(s);
+      setRound(r);
       setScore(sc);
     } catch (e) {
       console.warn("read failed", e);
@@ -84,7 +83,7 @@ export default function App() {
   function changeContractAddress() {
     clearSavedAddress();
     setContractAddress(null);
-    setSession(null);
+    setRound(null);
     setBoard([]);
   }
 
@@ -106,15 +105,7 @@ export default function App() {
   async function handleStart() {
     if (!account || !contractAddress || !clientRef.current) return;
     await withBusy(async () => {
-      await startGame(clientRef.current!, contractAddress);
-      await refresh();
-    });
-  }
-
-  async function handleSend(text: string) {
-    if (!account || !contractAddress || !clientRef.current) return;
-    await withBusy(async () => {
-      await sendMessage(clientRef.current!, contractAddress, text);
+      await startRound(clientRef.current!, contractAddress);
       await refresh();
     });
   }
@@ -127,14 +118,16 @@ export default function App() {
     });
   }
 
-  const inActiveRound = !!session?.active && !session.resolved;
+  const inActiveRound = !!round?.active && !round.resolved;
   const ctaLabel = !account
     ? "Connect wallet to play"
     : !contractAddress
       ? "Add contract address"
-      : session?.resolved
+      : round?.resolved
         ? "Play again"
-        : "Start Game";
+        : busy
+          ? "Drawing a sentence…"
+          : "Show me a sentence";
 
   function heroAction() {
     if (!account) return onConnect();
@@ -175,17 +168,12 @@ export default function App() {
       {error && <div className="error">{error}</div>}
 
       {account && contractAddress && inActiveRound && (
-        <GameScreen
-          session={session}
-          busy={busy}
-          onSend={handleSend}
-          onGuess={handleGuess}
-        />
+        <RoundScreen round={round} busy={busy} onGuess={handleGuess} />
       )}
 
       {account && contractAddress && (
         <>
-          <ResultCard session={session} onPlayAgain={handleStart} busy={busy} />
+          <ResultCard round={round} onPlayAgain={handleStart} busy={busy} />
           <Leaderboard rows={board} me={account} />
           <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
             <button className="ghost" onClick={changeContractAddress}>Change contract</button>

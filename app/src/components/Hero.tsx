@@ -11,8 +11,8 @@ export default function Hero({ onStart, busy, ctaLabel, disabled }: Props) {
       <div className="avatar" aria-hidden>👀</div>
       <h1>Mimic</h1>
       <p>
-        Chat with a stranger for a few seconds, then guess: human, or an AI mimicking one?
-        Your score and the leaderboard live entirely on-chain on GenLayer.
+        One sentence appears on screen. A real person wrote it, or an AI mimicked one.
+        Guess which. Score, mistakes, and the global leaderboard live entirely on-chain on GenLayer.
       </p>
       <button className="cta" onClick={onStart} disabled={busy || disabled}>
         {busy ? <span className="spinner" /> : null}
