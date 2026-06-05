@@ -88,10 +88,6 @@ function toNumber(v: unknown): number {
   return 0;
 }
 
-function shorten(addr: string): string {
-  return addr.length > 10 ? `${addr.slice(0, 6)}…${addr.slice(-4)}` : addr;
-}
-
 export async function getMyRound(
   client: GenLayerClient<any>,
   address: Address,
@@ -119,52 +115,15 @@ export async function getScore(
   );
 }
 
-/** Build the leaderboard by paging through (player_count) and reading each score. */
+/** Read the leaderboard (the contract returns a JSON string, sorted by score desc). */
 export async function getLeaderboard(
   client: GenLayerClient<any>,
   address: Address,
-  limit = 50,
 ): Promise<LeaderboardRow[]> {
-  const countRaw = await client.readContract({
+  const raw = await client.readContract({
     address,
-    functionName: "get_player_count",
+    functionName: "get_leaderboard",
     args: [],
   });
-  const count = Math.min(toNumber(countRaw), limit);
-  if (count <= 0) return [];
-
-  const indices = Array.from({ length: count }, (_, i) => i);
-  const players = await Promise.all(
-    indices.map((i) =>
-      client
-        .readContract({
-          address,
-          functionName: "get_player_at",
-          args: [i],
-        })
-        .then((v) => (typeof v === "string" ? v : "")),
-    ),
-  );
-
-  const triplets = await Promise.all(
-    players.map(async (addr) => {
-      if (!addr) return null;
-      const [score, wins, losses] = await Promise.all([
-        client.readContract({ address, functionName: "get_score", args: [addr] }),
-        client.readContract({ address, functionName: "get_wins", args: [addr] }),
-        client.readContract({ address, functionName: "get_losses", args: [addr] }),
-      ]);
-      return {
-        player: shorten(addr),
-        address: addr,
-        score: toNumber(score),
-        wins: toNumber(wins),
-        losses: toNumber(losses),
-      } satisfies LeaderboardRow;
-    }),
-  );
-
-  return (triplets.filter((r) => r !== null) as LeaderboardRow[]).sort(
-    (a, b) => b.score - a.score,
-  );
+  return safeParse<LeaderboardRow[]>(raw, []);
 }
