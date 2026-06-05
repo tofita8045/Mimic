@@ -1,4 +1,4 @@
-# v0.4.0 — Mimic, a fully on-chain "Human or AI?" guessing game on GenLayer.
+# v0.5.0 — Mimic, a fully on-chain "Human or AI?" guessing game on GenLayer.
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 #
 # Each round, the contract shows the player a short, funny one-liner.
@@ -13,48 +13,44 @@ import json
 
 
 class Mimic(gl.Contract):
-    # State, encoded as comma/JSON strings to keep the schema simple.
-    bank:    TreeMap[int, str]    # idx -> sentence
-    rounds:  TreeMap[str, str]    # player -> JSON {"persona","sentence","resolved","correct","guess"}
-    scores:  TreeMap[str, int]    # player -> cumulative points (int)
-    players: DynArray[str]        # all players who ever started a round
-    bank_size: int
+    # Storage uses sized integer types (no bare `int`) and string-encoded state.
+    bank: DynArray[str]              # one-liners (human-written), index by position
+    rounds: TreeMap[str, str]        # player -> JSON {"persona","sentence","resolved","correct","guess"}
+    wins: TreeMap[str, u256]         # player -> correct guesses
+    losses: TreeMap[str, u256]       # player -> wrong guesses
+    players: DynArray[str]           # all players who ever started a round
 
     def __init__(self) -> None:
-        self.bank = TreeMap()
         self.rounds = TreeMap()
-        self.scores = TreeMap()
+        self.wins = TreeMap()
+        self.losses = TreeMap()
         # Seed the on-chain bank of human-written one-liners.
-        sentences = [
-            "I told my plant a joke. It didn't leaf an impression.",
-            "I'm reading a book on anti-gravity. It's impossible to put down.",
-            "Why don't scientists trust atoms? They make up everything.",
-            "Parallel lines have so much in common. It's a shame they'll never meet.",
-            "My wallet is like an onion. Opening it makes me cry.",
-            "I used to play piano by ear, now I use my hands.",
-            "Time flies like an arrow. Fruit flies like a banana.",
-            "I'm on a seafood diet. I see food and I eat it.",
-            "Why did the scarecrow win an award? He was outstanding in his field.",
-            "My boss told me to have a good day, so I went home.",
-            "I tried to sue the airline for losing my luggage. I lost my case.",
-            "The early bird gets the worm, but the second mouse gets the cheese.",
-            "I have a fear of speed bumps. I am slowly getting over it.",
-            "Did you hear about the claustrophobic astronaut? He just needed space.",
-            "I told my wife she draws her eyebrows too high. She looked surprised.",
-        ]
-        for i in range(len(sentences)):
-            self.bank[i] = sentences[i]
-        self.bank_size = len(sentences)
+        self.bank.append("I told my plant a joke. It didn't leaf an impression.")
+        self.bank.append("I'm reading a book on anti-gravity. It's impossible to put down.")
+        self.bank.append("Why don't scientists trust atoms? They make up everything.")
+        self.bank.append("Parallel lines have so much in common. It's a shame they'll never meet.")
+        self.bank.append("My wallet is like an onion. Opening it makes me cry.")
+        self.bank.append("I used to play piano by ear, now I use my hands.")
+        self.bank.append("Time flies like an arrow. Fruit flies like a banana.")
+        self.bank.append("I'm on a seafood diet. I see food and I eat it.")
+        self.bank.append("Why did the scarecrow win an award? He was outstanding in his field.")
+        self.bank.append("My boss told me to have a good day, so I went home.")
+        self.bank.append("I tried to sue the airline for losing my luggage. I lost my case.")
+        self.bank.append("The early bird gets the worm, but the second mouse gets the cheese.")
+        self.bank.append("I have a fear of speed bumps. I am slowly getting over it.")
+        self.bank.append("Did you hear about the claustrophobic astronaut? He just needed space.")
+        self.bank.append("I told my wife she draws her eyebrows too high. She looked surprised.")
 
     # ── helpers ────────────────────────────────────────────────────────────
 
-    def _pick(self, seed: str) -> dict:
-        """Use Optimistic Democracy to pick a persona + (index | ai_sentence) for a round."""
-        n = self.bank_size
+    def _pick(self, seed: str) -> str:
+        """Use Optimistic Democracy to pick {persona, sentence} for a new round.
+        Returns a JSON string with keys 'persona' (human|ai) and 'sentence' (str)."""
+        n = len(self.bank)
         prompt = (
             'You run a "Human or AI?" guessing game.\n'
             'Flip a fair coin to pick a persona, then return ONLY JSON in this exact shape:\n'
-            '{"persona": "human" | "ai", "index": <int>, "ai_sentence": <string>}\n'
+            '{"persona": "human" or "ai", "index": <int>, "ai_sentence": <string>}\n'
             'Rules:\n'
             '- persona is picked randomly with about 50/50 probability.\n'
             f'- If persona is "human": index is a random integer from 0 to {n - 1} inclusive, '
@@ -72,32 +68,34 @@ class Mimic(gl.Contract):
 
         result = gl.eq_principle.prompt_comparative(
             call,
-            "Both persona values must match (human or ai).",
+            "Both responses must agree on the persona (human or ai).",
         )
         data = json.loads(result)
-        persona = data.get("persona")
-        if persona != "human" and persona != "ai":
-            raise Exception("LLM returned invalid persona")
+        persona = data.get("persona", "")
         if persona == "human":
-            idx = data.get("index")
+            idx = data.get("index", 0)
             if not isinstance(idx, int) or idx < 0 or idx >= n:
-                raise Exception("LLM returned invalid index")
-            return {"persona": "human", "sentence": self.bank[idx]}
-        s = data.get("ai_sentence")
-        if not isinstance(s, str) or len(s.strip()) < 5:
-            raise Exception("LLM returned invalid ai_sentence")
-        return {"persona": "ai", "sentence": s.strip()}
+                idx = 0
+            return json.dumps({"persona": "human", "sentence": self.bank[idx]})
+        if persona == "ai":
+            s = data.get("ai_sentence", "")
+            if not isinstance(s, str) or len(s.strip()) < 5:
+                raise Exception("LLM returned invalid ai_sentence")
+            return json.dumps({"persona": "ai", "sentence": s.strip()})
+        raise Exception("LLM returned invalid persona")
 
     # ── writes ─────────────────────────────────────────────────────────────
 
     @gl.public.write
     def start_round(self, player: str, seed: str) -> None:
         """Begin a new round for `player`. `seed` is any short string for randomness flavor."""
-        if player not in self.scores:
-            self.scores[player] = 0
+        if player not in self.wins:
+            self.wins[player] = u256(0)
+            self.losses[player] = u256(0)
             self.players.append(player)
 
-        picked = self._pick(seed)
+        picked_json = self._pick(seed)
+        picked = json.loads(picked_json)
         round_state = {
             "persona": picked["persona"],
             "sentence": picked["sentence"],
@@ -119,18 +117,18 @@ class Mimic(gl.Contract):
         if state.get("resolved"):
             raise Exception("Already resolved.")
 
-        secret = state.get("persona")
+        secret = state.get("persona", "")
         correct = normalized == secret
 
         state["guess"] = normalized
         state["correct"] = correct
         state["resolved"] = True
-        # Reveal the persona on resolution by leaving it as-is — readers expose it
-        # only when resolved=True (see get_my_round).
         self.rounds[player] = json.dumps(state)
 
-        delta = 10 if correct else -5
-        self.scores[player] = self.scores[player] + delta
+        if correct:
+            self.wins[player] = u256(int(self.wins[player]) + 1)
+        else:
+            self.losses[player] = u256(int(self.losses[player]) + 1)
 
     # ── views ──────────────────────────────────────────────────────────────
 
@@ -151,15 +149,40 @@ class Mimic(gl.Contract):
 
     @gl.public.view
     def get_score(self, player: str) -> int:
-        return int(self.scores.get(player, 0))
+        if player not in self.wins:
+            return 0
+        w = int(self.wins[player])
+        l = int(self.losses[player])
+        return w * 10 - l * 5
+
+    @gl.public.view
+    def get_stats(self, player: str) -> dict:
+        if player not in self.wins:
+            return {"played": False, "wins": 0, "losses": 0, "score": 0}
+        w = int(self.wins[player])
+        l = int(self.losses[player])
+        return {
+            "played": True,
+            "wins": w,
+            "losses": l,
+            "score": w * 10 - l * 5,
+        }
 
     @gl.public.view
     def get_leaderboard(self) -> list:
         rows = []
         for addr in self.players:
-            score = int(self.scores[addr])
+            w = int(self.wins[addr])
+            l = int(self.losses[addr])
+            score = w * 10 - l * 5
             short = addr[:6] + "..." + addr[-4:] if len(addr) > 10 else addr
-            rows.append({"player": short, "address": addr, "score": score})
+            rows.append({
+                "player": short,
+                "address": addr,
+                "wins": w,
+                "losses": l,
+                "score": score,
+            })
         rows.sort(key=lambda x: -x["score"])
         return rows[:50]
 
@@ -172,4 +195,4 @@ class Mimic(gl.Contract):
 
     @gl.public.view
     def get_bank_size(self) -> int:
-        return int(self.bank_size)
+        return len(self.bank)

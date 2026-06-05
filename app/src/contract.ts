@@ -18,6 +18,8 @@ export interface RoundView {
 export interface LeaderboardRow {
   player: string;       // shortened display label
   address: string;      // full wallet address
+  wins?: number;
+  losses?: number;
   score: number;
 }
 
