@@ -1,9 +1,9 @@
 # { "Depends": "py-genlayer:1jb45aa8ynh2a9c9xn3b7qqh8sm5q93hwfp7jqmwsfhh8jpz09h6" }
 # Mimic — a fully on-chain "Human or AI?" guessing game on GenLayer.
 #
-# NOTE: TreeMap.items() iteration breaks the Studio schema loader, so the
-# leaderboard is built client-side: the contract tracks players in a DynArray and
-# exposes get_player_count / get_player_at, and the frontend reads each score.
+# Storage is TreeMap[str, str] only (no DynArray, no TreeMap.items()), which is
+# what the Studio schema loader accepts. The set of players is kept as a single
+# newline-separated string under a reserved key in `meta`.
 from genlayer import *
 
 import json
@@ -12,17 +12,22 @@ import json
 class Mimic(gl.Contract):
     rounds: TreeMap[str, str]    # player -> JSON {persona, sentence, resolved, correct, guess}
     stats: TreeMap[str, str]     # player -> "wins,losses"
-    players: DynArray[str]       # every player who has started a round (for the leaderboard)
+    meta: TreeMap[str, str]      # "players" -> "addr1\naddr2\n..."
 
     def __init__(self) -> None:
         self.rounds = TreeMap()
         self.stats = TreeMap()
+        self.meta = TreeMap()
 
     @gl.public.write
     def start_round(self, player: str, seed: str) -> None:
         if player not in self.stats:
             self.stats[player] = "0,0"
-            self.players.append(player)
+            roster = self.meta.get("players", "")
+            if roster == "":
+                self.meta["players"] = player
+            else:
+                self.meta["players"] = roster + "\n" + player
 
         bank = [
             "I told my plant a joke. It didn't leaf an impression.",
@@ -142,11 +147,30 @@ class Mimic(gl.Contract):
         return self.stats.get(player, "0,0")
 
     @gl.public.view
-    def get_player_count(self) -> int:
-        return len(self.players)
-
-    @gl.public.view
-    def get_player_at(self, idx: int) -> str:
-        if idx < 0 or idx >= len(self.players):
-            return ""
-        return self.players[idx]
+    def get_leaderboard(self) -> str:
+        roster = self.meta.get("players", "")
+        if roster == "":
+            return "[]"
+        addresses = roster.split("\n")
+        rows = []
+        i = 0
+        while i < len(addresses):
+            addr = addresses[i]
+            parts = self.stats.get(addr, "0,0").split(",")
+            wins = int(parts[0])
+            losses = int(parts[1])
+            score = wins * 10 - losses * 5
+            short = addr[:6] + "..." + addr[-4:] if len(addr) > 10 else addr
+            rows.append({"player": short, "address": addr, "wins": wins, "losses": losses, "score": score})
+            i = i + 1
+        # Manual sort by score desc (no lambda).
+        a = 1
+        while a < len(rows):
+            b = a
+            while b > 0 and rows[b]["score"] > rows[b - 1]["score"]:
+                tmp = rows[b]
+                rows[b] = rows[b - 1]
+                rows[b - 1] = tmp
+                b = b - 1
+            a = a + 1
+        return json.dumps(rows)
