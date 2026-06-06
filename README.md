@@ -1,54 +1,79 @@
-# Mimic — a fully on-chain "Human or AI?" game on GenLayer
+<div align="center">
 
-> 🐍 **Intelligent Contract:** [`contracts/mimic.py`](./contracts/mimic.py)
-> · deployed on **Studionet** at `0xE7B778a52d0891549A3105d1633F1087d351afa5`
->
-> 🌐 **Frontend:** [`app/`](./app) — Vite + React + TypeScript + `genlayer-js`. Connect any
-> wallet (MetaMask, OKX, Rabby, Coinbase…) via EIP-6963.
+# 🕵️ Mimic — Human or AI?
 
-Each round, one short one-liner appears on screen. It was either picked at random from a
-curated bank of human-written sentences, or freshly written by an LLM at round start. You
-guess: **HUMAN** or **AI**. Score and the global leaderboard live entirely in the
-Intelligent Contract — no off-chain backend.
+**A fully on-chain "Human or AI?" chat game built on [GenLayer](https://genlayer.com).**
 
-## How to play
+Chat with a stranger. It's secretly either a human-style persona or an AI — guess which.
+Every reply is computed on-chain by GenLayer's AI validators. Your score and the global
+leaderboard live entirely in an Intelligent Contract. No backend.
 
-1. **Connect a wallet** — MetaMask, OKX, Rabby, Coinbase, or any EIP-1193 wallet. The app
-   detects installed wallets via EIP-6963 and lets you pick one.
-2. **Play a round** — `start_round` is payable and charges a small entry fee
-   (**0.0001 GEN**). The contract picks a secret persona via LLM consensus and shows you a
-   one-liner.
-3. **Guess** HUMAN or AI. Correct = +10, wrong = −5. Play again pays the fee again.
-4. The **leaderboard** is public and ranks every player by score.
+</div>
 
-## What makes this a real GenLayer Intelligent Contract
+---
 
-The contract at [`contracts/mimic.py`](./contracts/mimic.py) uses the GenLayer SDK:
+## 🎮 How it works
 
-| GenLayer feature | Where in `mimic.py` |
+1. **Connect your wallet** — MetaMask, OKX, Rabby, Coinbase, or any EIP-1193 wallet
+   (detected automatically via EIP-6963).
+2. **Play a round** — `start_round` is payable and charges a tiny entry fee
+   (**0.0001 GEN**). The contract secretly picks a persona (`human` or `ai`) via LLM
+   consensus.
+3. **Chat** — send messages; the "stranger" replies in character. Replies are real
+   on-chain transactions, so each takes a few seconds to settle.
+4. **Guess** — call it **HUMAN** or **AI**. Correct = **+10**, wrong = **−5**.
+5. **Leaderboard** — every player is ranked publicly by score.
+
+---
+
+## 🧠 Why GenLayer
+
+GenLayer is an AI-native blockchain: validator nodes run LLMs and reach **Optimistic
+Democracy** consensus on non-deterministic results. Mimic uses that directly — the secret
+persona and every chat reply are produced by an LLM *inside the contract* and agreed on by
+validators. The "answer" is on-chain the whole time; you just can't see it until you guess.
+
+| GenLayer feature | Where it's used in [`contracts/mimic.py`](./contracts/mimic.py) |
 |---|---|
-| `gl.Contract` base class | `class Mimic(gl.Contract)` |
-| `@gl.public.write` methods | `start_round`, `make_guess` |
-| `@gl.public.view` methods | `get_active`, `get_resolved`, `get_sentence`, `get_persona_revealed`, `get_guess`, `get_correct`, `get_score`, `get_leaderboard`, … |
-| `gl.message.sender_address` | identifies the player on every write |
-| `gl.message.value` + `@gl.public.write.payable` | the entry fee on `start_round` |
-| `gl.nondet.exec_prompt` | the LLM call (inside the leader function) |
-| `gl.vm.run_nondet_unsafe(leader_fn, validator_fn)` | persona coin-flip + AI sentence generation, with validator consensus on a structurally valid JSON output |
-| `gl.vm.UserError` | rejects invalid guesses / states |
-| Persistent storage: `TreeMap[Address, …]`, `DynArray[Address]`, `u256` | rounds, scores, players |
+| `gl.Contract` | `class Mimic(gl.Contract)` |
+| `@gl.public.write.payable` + `gl.message.value` | entry fee on `start_round` |
+| `gl.message.sender_address` | identifies the player |
+| `gl.nondet.exec_prompt` | the LLM call (persona + replies) |
+| `gl.vm.run_nondet_unsafe(leader_fn, validator_fn)` | validator consensus on LLM output |
+| `gl.vm.UserError` | input / state validation |
+| `TreeMap[Address, …]`, `DynArray[Address]`, `u256` | on-chain game state + leaderboard |
 
-## Project layout
+---
+
+## 🌐 Network & deployment
+
+- **Network:** GenLayer **Studionet** — `https://studio.genlayer.com/api` · chain ID `61999`
+- **Deployed contract:** [`0xEBDCa401A7ABc0161BBda43311d65c14a92b0590`](https://explorer-studio.genlayer.com)
+- **Faucet:** use the 💧 button in the Studio account selector to fund your wallet with test GEN.
+
+---
+
+## 🛠️ Tech stack
+
+- **Contract:** Python Intelligent Contract on GenVM ([`contracts/mimic.py`](./contracts/mimic.py))
+- **Frontend:** React + TypeScript + Vite
+- **SDK:** [`genlayer-js`](https://www.npmjs.com/package/genlayer-js) for reads, writes, and wallet integration
 
 ```
 mimic/
 ├── contracts/
-│   └── mimic.py         # Intelligent Contract — the GenLayer SDK code
-├── app/                 # Vite + React + TypeScript + genlayer-js frontend
-├── .kiro/specs/mimic/   # design + requirements + tasks (Kiro spec)
-└── README.md
+│   └── mimic.py              # the GenLayer Intelligent Contract
+└── app/                      # React + Vite frontend
+    └── src/
+        ├── App.tsx           # game flow & state
+        ├── genlayer.ts       # wallet discovery (EIP-6963) + client setup
+        ├── contract.ts       # typed contract wrappers
+        └── components/       # ChatScreen, ResultScreen, Leaderboard, …
 ```
 
-## Run the frontend
+---
+
+## 🚀 Run locally
 
 ```bash
 cd app
@@ -56,31 +81,10 @@ npm install
 npm run dev
 ```
 
-Open http://127.0.0.1:5173 and play. The contract is already deployed on Studionet, so
-there's nothing to set up.
+Open the printed URL, connect a wallet on Studionet, fund it from the faucet, and play.
 
-## How a round works
+---
 
-`start_round` makes one LLM call inside GenLayer's Optimistic Democracy consensus that
-decides everything for the round:
-- flip a fair coin to pick the secret persona (`"human"` or `"ai"`),
-- if `"human"`: pick a random index into the on-chain bank of human-written one-liners,
-- if `"ai"`: write a fresh, original one-liner.
+## 📜 License
 
-Validators independently re-run the prompt and accept the leader's verdict only when the
-JSON is structurally valid and the personas agree.
-
-`make_guess` reveals the persona, scores the round (+10 if correct, −5 if wrong), and
-updates the leaderboard. Because writes trigger an LLM consensus round, they take a little
-time to finalize — the UI shows a "thinking" state while waiting.
-
-## Notes
-
-- Network: **Studionet** (`https://studio.genlayer.com/api`, chain ID 61999).
-- The 60-second round timer is a UI element (UX); the contract itself is single-decision.
-- `start_round` is payable (0.0001 GEN). On Studionet, fund your wallet with the 💧 faucet.
-- Connect any EIP-1193 wallet — MetaMask, OKX, Rabby, Coinbase, etc.
-
-## License
-
-MIT.
+[MIT](./LICENSE)

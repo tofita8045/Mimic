@@ -22,3 +22,6 @@ yarn-error.log*
 # Python
 __pycache__/
 *.pyc
+
+# Kiro internal specs
+.kiro/

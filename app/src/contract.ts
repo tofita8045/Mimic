@@ -3,7 +3,7 @@ import type { GenLayerClient } from "genlayer-js/types";
 import { TransactionStatus } from "./genlayer";
 
 // The deployed Mimic (chat) contract on GenLayer Studionet.
-export const CONTRACT_ADDRESS = "0xddFCFFFA5C5f86A2fD94f1dc917edC22838942c3" as const;
+export const CONTRACT_ADDRESS = "0xEBDCa401A7ABc0161BBda43311d65c14a92b0590" as const;
 
 // Entry fee per round: 0.0001 GEN, in wei (must match ENTRY_FEE_WEI in mimic.py).
 export const ENTRY_FEE_WEI = 100000000000000n;
