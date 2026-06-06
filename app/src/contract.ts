@@ -61,18 +61,21 @@ async function writeAndWait(
   args: unknown[],
   value: bigint,
 ): Promise<void> {
+  console.log(`[mimic] writeContract ${functionName}`, args, "value", value.toString());
   const hash = await client.writeContract({
     address: ADDR,
     functionName,
     args: args as any,
     value,
   });
-  await client.waitForTransactionReceipt({
+  console.log(`[mimic] ${functionName} tx hash:`, hash);
+  const receipt = await client.waitForTransactionReceipt({
     hash,
     status: TransactionStatus.ACCEPTED,
     retries: 400,
     interval: 5000,
   });
+  console.log(`[mimic] ${functionName} receipt status:`, (receipt as any)?.statusName ?? (receipt as any)?.status);
 }
 
 export async function startRound(client: GenLayerClient<any>, seed: string) {

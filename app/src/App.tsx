@@ -159,15 +159,20 @@ export default function App() {
 
   async function handleSend(text: string) {
     if (!clientRef.current) return;
+    const prevCount = round?.messages.length ?? 0;
     // Optimistically show the player's message right away.
     setRound((prev) =>
-      prev
-        ? { ...prev, messages: [...prev.messages, { role: "you", text }] }
-        : prev,
+      prev ? { ...prev, messages: [...prev.messages, { role: "you", text }] } : prev,
     );
     await withBusy(async () => {
       await sendMessage(clientRef.current!, text);
-      await refreshMe();
+      // The on-chain read can lag behind the accepted tx — poll until the
+      // transcript grows (i.e. the opponent's reply landed).
+      for (let i = 0; i < 15; i++) {
+        const r = await refreshMe();
+        if (r && r.messages.length > prevCount + 1) return;
+        await new Promise((res) => setTimeout(res, 2000));
+      }
     });
   }
 
