@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🕵️ Mimic — Human or AI?
+# 🕵️ Mimic Human or AI?
 
 **A fully on-chain "Human or AI?" chat game built on [GenLayer](https://genlayer.com).**
 
