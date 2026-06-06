@@ -4,7 +4,6 @@ import {
   DetectedWallet,
   Hex,
   discoverWallets,
-  fundAccount,
   makeClient,
   makeReadClient,
   requestAccounts,
@@ -35,7 +34,6 @@ export default function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [picker, setPicker] = useState<DetectedWallet[] | null>(null);
-  const [funding, setFunding] = useState(false);
 
   // "idle" | "playing" | "result" — controls which screen shows.
   // The result screen persists until the player explicitly starts a New Game.
@@ -174,26 +172,12 @@ export default function App() {
     handleStart();
   }
 
-  async function handleFund() {
-    if (!clientRef.current || !account) return;
-    setFunding(true);
-    setError(null);
-    try {
-      await fundAccount(clientRef.current, account, 1);
-      setError("✅ Funded with 1 test GEN. You can play now.");
-    } catch (e: any) {
-      setError(e?.shortMessage ?? e?.message ?? "Faucet failed. Try again.");
-    } finally {
-      setFunding(false);
-    }
-  }
-
   const connected = !!account;
   const showHero = view === "idle";
 
   return (
     <div className="app">
-      <WalletBar address={account} score={score} onConnect={openConnect} onFund={handleFund} funding={funding} />
+      <WalletBar address={account} score={score} onConnect={openConnect} />
 
       {showHero && (
         <Hero

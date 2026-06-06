@@ -83,14 +83,4 @@ export function makeReadClient(): GenLayerClient<any> {
   return createClient({ chain: studionet }) as GenLayerClient<any>;
 }
 
-/** Fund an address with test GEN via the Studionet faucet (sim_fundAccount). */
-export async function fundAccount(client: GenLayerClient<any>, address: Hex, gen = 1): Promise<void> {
-  const wei = BigInt(gen) * 10n ** 18n;
-  await (client as any).request({
-    method: "sim_fundAccount",
-    // The RPC expects a number; 1 GEN fits safely in a JS number.
-    params: [address, Number(wei)],
-  });
-}
-
 export { TransactionStatus, studionet };
