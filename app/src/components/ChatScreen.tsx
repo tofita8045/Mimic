@@ -86,7 +86,11 @@ export default function ChatScreen({ round, busy, onSend, onGuess }: Props) {
       </div>
 
       <div className="chat-meta">
-        {turnsLeft > 0 ? `${turnsLeft} messages left` : "Make your call"} · waiting on AI takes ~30s
+        {busy
+          ? "Confirm in your wallet, then the stranger replies on-chain (~30s)…"
+          : turnsLeft > 0
+            ? `${turnsLeft} messages left · replies are computed on-chain`
+            : "Make your call"}
       </div>
 
       <div className="guess-row">

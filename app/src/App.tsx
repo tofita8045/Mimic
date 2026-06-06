@@ -98,15 +98,24 @@ export default function App() {
     setError(null);
     try {
       const address = await requestAccounts(w.provider);
-      clientRef.current = makeClient(w.provider, address);
+      const client = makeClient(w.provider, address);
+      // Switch the wallet to Studionet ONCE here (not on every transaction).
+      try {
+        await client.connect("studionet");
+      } catch (e) {
+        console.warn("connect() failed", e);
+      }
+      clientRef.current = client;
       setAccount(address);
-      w.provider.on?.("accountsChanged", (accs: string[]) => {
+      w.provider.on?.("accountsChanged", async (accs: string[]) => {
         if (!accs || accs.length === 0) {
           setAccount(null);
           clientRef.current = null;
         } else {
           const next = accs[0] as Hex;
-          clientRef.current = makeClient(w.provider, next);
+          const c = makeClient(w.provider, next);
+          try { await c.connect("studionet"); } catch {}
+          clientRef.current = c;
           setAccount(next);
         }
       });

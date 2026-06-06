@@ -61,7 +61,6 @@ async function writeAndWait(
   args: unknown[],
   value: bigint,
 ): Promise<void> {
-  await ensureNetwork(client);
   const hash = await client.writeContract({
     address: ADDR,
     functionName,
