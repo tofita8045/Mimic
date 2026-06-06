@@ -180,9 +180,17 @@ export default function App() {
     if (!clientRef.current) return;
     const r = await withBusy(async () => {
       await makeGuess(clientRef.current!, g);
-      const updated = await refreshMe();
+      // The resolved flag / revealed persona can lag the accepted tx — poll for it.
+      for (let i = 0; i < 15; i++) {
+        const updated = await refreshMe();
+        if (updated?.resolved) {
+          await refreshLeaderboard();
+          return updated;
+        }
+        await new Promise((res) => setTimeout(res, 2000));
+      }
       await refreshLeaderboard();
-      return updated;
+      return await refreshMe();
     });
     if (r?.resolved) setView("result");
   }

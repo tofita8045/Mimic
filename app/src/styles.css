@@ -674,3 +674,39 @@ button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
   font-size: 12px;
   font-weight: 700;
 }
+
+
+/* ----- Judge box (GenLayer role) ----------------------------------------- */
+.judge {
+  margin: 16px auto 0;
+  max-width: 440px;
+  text-align: left;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+}
+.judge-head {
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  margin-bottom: 8px;
+  color: var(--accent);
+}
+.judge p {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-soft);
+}
+.judge .judge-tech {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0;
+}
+.judge code {
+  background: rgba(28, 26, 23, 0.06);
+  padding: 1px 5px;
+  border-radius: 5px;
+  font-size: 11px;
+}

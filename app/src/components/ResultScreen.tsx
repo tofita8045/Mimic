@@ -42,11 +42,19 @@ export default function ResultScreen({ round, busy, onNewGame }: Props) {
             {correct ? "🎉" : "😞"}
           </div>
           <div className="verdict-score">{correct ? "+10 points" : "−5 points"}</div>
-          <p className="verdict-why">
-            {correct
-              ? `You read the signals right. GenLayer's validators reached AI consensus to set the secret persona to "${wasLabel}" at round start — and your guess matched.`
-              : `The mimic fooled you. At round start, GenLayer's validators reached consensus (Optimistic Democracy) on a secret persona of "${wasLabel}", and every reply stayed in character. That hidden value was on-chain the whole time — you just couldn't see it until now.`}
-          </p>
+
+          <div className="judge">
+            <div className="judge-head">⚖️ Judged by GenLayer</div>
+            <p>
+              {correct
+                ? `GenLayer's AI validators secretly set this stranger's persona to "${wasLabel}" at the start of the round, reaching consensus through Optimistic Democracy. The value was sealed on-chain — and your read was right.`
+                : `GenLayer's AI validators secretly set this stranger's persona to "${wasLabel}" at the start of the round and made every reply stay in character. The verdict was decided on-chain by validator consensus, not by any server — and this time the mimic won.`}
+            </p>
+            <p className="judge-tech">
+              persona pick &amp; replies → <code>gl.nondet.exec_prompt</code> · consensus →
+              <code> gl.vm.run_nondet_unsafe</code> · scoring &amp; result → on-chain, tamper-proof
+            </p>
+          </div>
         </div>
       </div>
 
