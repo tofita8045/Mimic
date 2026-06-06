@@ -52,8 +52,9 @@ export default function App() {
   }, []);
 
   const refreshMe = useCallback(async () => {
-    const client = clientRef.current;
-    if (!client || !account) return null;
+    if (!account) return null;
+    // Reads go through the read-only client (no wallet round-trips, more reliable).
+    const client = readClientRef.current!;
     try {
       const [r, sc] = await Promise.all([
         getMyRound(client, account),
@@ -149,6 +150,12 @@ export default function App() {
 
   async function handleSend(text: string) {
     if (!clientRef.current) return;
+    // Optimistically show the player's message right away.
+    setRound((prev) =>
+      prev
+        ? { ...prev, messages: [...prev.messages, { role: "you", text }] }
+        : prev,
+    );
     await withBusy(async () => {
       await sendMessage(clientRef.current!, text);
       await refreshMe();
