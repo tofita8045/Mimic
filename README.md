@@ -4,7 +4,7 @@
 
 **A fully on-chain "Human or AI?" chat game built on [GenLayer](https://genlayer.com).**
 
-Chat with a stranger. It's secretly either a human-style persona or an AI — guess which.
+Chat with a stranger. It's secretly either a human-style persona or an AI  guess which.
 Every reply is computed on-chain by GenLayer's AI validators. Your score and the global
 leaderboard live entirely in an Intelligent Contract. No backend.
 
@@ -14,15 +14,15 @@ leaderboard live entirely in an Intelligent Contract. No backend.
 
 ## 🎮 How it works
 
-1. **Connect your wallet** — MetaMask, OKX, Rabby, Coinbase, or any EIP-1193 wallet
+1. **Connect your wallet**  MetaMask, OKX, Rabby, Coinbase, or any EIP-1193 wallet
    (detected automatically via EIP-6963).
-2. **Play a round** — `start_round` is payable and charges a tiny entry fee
+2. **Play a round**  `start_round` is payable and charges a tiny entry fee
    (**0.0001 GEN**). The contract secretly picks a persona (`human` or `ai`) via LLM
    consensus.
-3. **Chat** — send messages; the "stranger" replies in character. Replies are real
+3. **Chat** send messages; the "stranger" replies in character. Replies are real
    on-chain transactions, so each takes a few seconds to settle.
-4. **Guess** — call it **HUMAN** or **AI**. Correct = **+10**, wrong = **−5**.
-5. **Leaderboard** — every player is ranked publicly by score.
+4. **Guess**  call it **HUMAN** or **AI**. Correct = **+10**, wrong = **−5**.
+5. **Leaderboard**  every player is ranked publicly by score.
 
 ---
 
