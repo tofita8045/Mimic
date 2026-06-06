@@ -1,79 +1,39 @@
-// SDK setup for the Human-or-AI game. Uses real genlayer-js APIs straight from the docs.
-// Wallet-agnostic: works with any EIP-1193 provider (Rabby, MetaMask, OKX, Coinbase, etc.).
-import { createClient } from "genlayer-js";
+// SDK setup for Mimic.
+//
+// Players don't need MetaMask, a snap, or any wallet extension. The app creates a
+// local "burner" account (a fresh private key stored in localStorage) and signs
+// every transaction directly with genlayer-js. This keeps onboarding to zero clicks
+// and works in every browser regardless of installed wallets.
+import { createClient, createAccount, generatePrivateKey } from "genlayer-js";
 import { studionet } from "genlayer-js/chains";
 import { TransactionStatus } from "genlayer-js/types";
 import type { GenLayerClient } from "genlayer-js/types";
 
-interface Eip1193Provider {
-  request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
-}
+const PK_KEY = "mimic.burnerPrivateKey";
 
-declare global {
-  interface Window {
-    ethereum?: Eip1193Provider & { providers?: Eip1193Provider[] };
+export type Hex = `0x${string}`;
+
+/** Get (or lazily create) the player's local burner private key. */
+export function getOrCreatePrivateKey(): Hex {
+  let pk = localStorage.getItem(PK_KEY);
+  if (!pk || !pk.startsWith("0x")) {
+    pk = generatePrivateKey() as string;
+    localStorage.setItem(PK_KEY, pk);
   }
+  return pk as Hex;
 }
 
-/** Info about a detected wallet (EIP-6963 announce). */
-export interface DetectedWallet {
-  uuid: string;
-  name: string;
-  icon: string;
-  rdns: string;
+/** Build a genlayer-js client bound to the local burner account on Studionet. */
+export function makeClient(): { client: GenLayerClient<any>; address: Hex } {
+  const pk = getOrCreatePrivateKey();
+  const account = createAccount(pk);
+  const client = createClient({ chain: studionet, account }) as GenLayerClient<any>;
+  return { client, address: account.address as Hex };
 }
 
-/** Discover injected wallets via EIP-6963. Falls back to a single generic entry
- *  if only the legacy `window.ethereum` is available. */
-export function discoverWallets(timeoutMs = 200): Promise<DetectedWallet[]> {
-  return new Promise((resolve) => {
-    const found = new Map<string, DetectedWallet>();
-
-    const onAnnounce = (event: Event) => {
-      const detail = (event as CustomEvent).detail as
-        | { info: DetectedWallet; provider: Eip1193Provider }
-        | undefined;
-      if (detail?.info) found.set(detail.info.uuid, detail.info);
-    };
-
-    window.addEventListener("eip6963:announceProvider", onAnnounce as EventListener);
-    window.dispatchEvent(new Event("eip6963:requestProvider"));
-
-    window.setTimeout(() => {
-      window.removeEventListener("eip6963:announceProvider", onAnnounce as EventListener);
-      const list = Array.from(found.values());
-      if (list.length === 0 && typeof window.ethereum !== "undefined") {
-        list.push({
-          uuid: "legacy",
-          name: "Browser wallet",
-          icon: "",
-          rdns: "legacy",
-        });
-      }
-      resolve(list);
-    }, timeoutMs);
-  });
-}
-
-/** Create a genlayer-js client bound to the user's wallet address on Studionet. */
-export function makeClient(account: `0x${string}`): GenLayerClient<any> {
-  return createClient({ chain: studionet, account }) as GenLayerClient<any>;
-}
-
-/** Request accounts from the active injected wallet (whichever one set window.ethereum). */
-export async function connectWallet(): Promise<`0x${string}`> {
-  if (typeof window.ethereum === "undefined") {
-    throw new Error(
-      "No wallet detected. Install an EIP-1193 wallet (Rabby, MetaMask, OKX, Coinbase, etc.).",
-    );
-  }
-  const accounts = (await window.ethereum.request({
-    method: "eth_requestAccounts",
-  })) as string[];
-  if (!accounts || accounts.length === 0) {
-    throw new Error("No account selected in the wallet.");
-  }
-  return accounts[0] as `0x${string}`;
+/** Reset the local identity (new burner account). */
+export function resetIdentity(): void {
+  localStorage.removeItem(PK_KEY);
 }
 
 export { TransactionStatus, studionet };
