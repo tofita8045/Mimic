@@ -1,27 +1,25 @@
 # Mimic — a fully on-chain "Human or AI?" game on GenLayer
 
 > 🐍 **Intelligent Contract:** [`contracts/mimic.py`](./contracts/mimic.py)
-> · deployed on **Studionet** at `0x56E39F008e29ecd45D2b76F330AEb3AE992B66Ad`
+> · deployed on **Studionet** at `0xE7B778a52d0891549A3105d1633F1087d351afa5`
 >
-> 🌐 **Frontend:** [`app/`](./app) — Vite + React + TypeScript + `genlayer-js`. No wallet
-> extension required: the app uses a local burner account and signs transactions directly.
+> 🌐 **Frontend:** [`app/`](./app) — Vite + React + TypeScript + `genlayer-js`. Connect any
+> wallet (MetaMask, OKX, Rabby, Coinbase…) via EIP-6963.
 
 Each round, one short one-liner appears on screen. It was either picked at random from a
 curated bank of human-written sentences, or freshly written by an LLM at round start. You
 guess: **HUMAN** or **AI**. Score and the global leaderboard live entirely in the
 Intelligent Contract — no off-chain backend.
 
-## Why there's no "connect wallet" button
+## How to play
 
-Players just open the page and play. On first load the app creates a **local burner
-account** (a fresh key stored in `localStorage`) and signs every transaction with
-`genlayer-js` directly. This means:
-
-- ✅ Works in any browser — no MetaMask, no snap, no OKX/Rabby extension needed.
-- ✅ Zero-click onboarding.
-- ✅ On Studionet (no gas), the burner can transact immediately.
-
-Use **New identity** in the top bar to start fresh with a new local account.
+1. **Connect a wallet** — MetaMask, OKX, Rabby, Coinbase, or any EIP-1193 wallet. The app
+   detects installed wallets via EIP-6963 and lets you pick one.
+2. **Play a round** — `start_round` is payable and charges a small entry fee
+   (**0.0001 GEN**). The contract picks a secret persona via LLM consensus and shows you a
+   one-liner.
+3. **Guess** HUMAN or AI. Correct = +10, wrong = −5. Play again pays the fee again.
+4. The **leaderboard** is public and ranks every player by score.
 
 ## What makes this a real GenLayer Intelligent Contract
 
@@ -33,6 +31,7 @@ The contract at [`contracts/mimic.py`](./contracts/mimic.py) uses the GenLayer S
 | `@gl.public.write` methods | `start_round`, `make_guess` |
 | `@gl.public.view` methods | `get_active`, `get_resolved`, `get_sentence`, `get_persona_revealed`, `get_guess`, `get_correct`, `get_score`, `get_leaderboard`, … |
 | `gl.message.sender_address` | identifies the player on every write |
+| `gl.message.value` + `@gl.public.write.payable` | the entry fee on `start_round` |
 | `gl.nondet.exec_prompt` | the LLM call (inside the leader function) |
 | `gl.vm.run_nondet_unsafe(leader_fn, validator_fn)` | persona coin-flip + AI sentence generation, with validator consensus on a structurally valid JSON output |
 | `gl.vm.UserError` | rejects invalid guesses / states |
@@ -79,7 +78,8 @@ time to finalize — the UI shows a "thinking" state while waiting.
 
 - Network: **Studionet** (`https://studio.genlayer.com/api`, chain ID 61999).
 - The 60-second round timer is a UI element (UX); the contract itself is single-decision.
-- All transactions are signed locally by the burner account — no private key leaves the browser.
+- `start_round` is payable (0.0001 GEN). On Studionet, fund your wallet with the 💧 faucet.
+- Connect any EIP-1193 wallet — MetaMask, OKX, Rabby, Coinbase, etc.
 
 ## License
 

@@ -1,10 +1,12 @@
 // Typed wrappers around the Mimic Intelligent Contract.
-// Signing is done by the local burner account (see genlayer.ts) — no client.connect().
 import type { GenLayerClient } from "genlayer-js/types";
 import { TransactionStatus } from "./genlayer";
 
 // The deployed Mimic contract on GenLayer Studionet.
-export const CONTRACT_ADDRESS = "0x56E39F008e29ecd45D2b76F330AEb3AE992B66Ad" as const;
+export const CONTRACT_ADDRESS = "0xE7B778a52d0891549A3105d1633F1087d351afa5" as const;
+
+// Entry fee per round: 0.0001 GEN, in wei (must match ENTRY_FEE_WEI in mimic.py).
+export const ENTRY_FEE_WEI = 100000000000000n; // 1e14
 
 export type Address = `0x${string}`;
 
@@ -42,16 +44,23 @@ function toBool(v: unknown): boolean {
 
 const ADDR = CONTRACT_ADDRESS as Address;
 
+/** Switch the wallet to Studionet (required before signing with a real wallet). */
+export async function ensureNetwork(client: GenLayerClient<any>): Promise<void> {
+  await client.connect("studionet");
+}
+
 async function writeAndWait(
   client: GenLayerClient<any>,
   functionName: string,
   args: unknown[],
+  value: bigint,
 ): Promise<void> {
+  await ensureNetwork(client);
   const hash = await client.writeContract({
     address: ADDR,
     functionName,
     args: args as any,
-    value: 0n,
+    value,
   });
   // LLM consensus can take a while — wait generously.
   await client.waitForTransactionReceipt({
@@ -63,11 +72,12 @@ async function writeAndWait(
 }
 
 export async function startRound(client: GenLayerClient<any>, seed: string) {
-  return writeAndWait(client, "start_round", [seed]);
+  // Pays the entry fee.
+  return writeAndWait(client, "start_round", [seed], ENTRY_FEE_WEI);
 }
 
 export async function makeGuess(client: GenLayerClient<any>, guess: "human" | "ai") {
-  return writeAndWait(client, "make_guess", [guess]);
+  return writeAndWait(client, "make_guess", [guess], 0n);
 }
 
 async function readView(

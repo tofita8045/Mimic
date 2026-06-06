@@ -459,3 +459,45 @@ button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
   color: var(--ink);
 }
 .quote.subdued p { font-size: 18px; color: var(--ink-soft); font-weight: 500; }
+
+
+/* ----- Wallet picker modal ------------------------------------------------ */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(28, 26, 23, 0.45);
+  backdrop-filter: blur(3px);
+  display: grid;
+  place-items: center;
+  z-index: 50;
+}
+.modal {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  width: min(380px, 92vw);
+  box-shadow: var(--shadow);
+}
+.modal h3 {
+  margin: 0 0 14px;
+  font-size: 18px;
+  letter-spacing: -0.3px;
+}
+.wallet-list { display: flex; flex-direction: column; gap: 8px; }
+.wallet-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: var(--bg-2);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-weight: 600;
+  justify-content: flex-start;
+}
+.wallet-option:hover { background: #fff; border-color: var(--ink); }
+.wallet-option img { border-radius: 6px; }
+.wallet-fallback { font-size: 20px; }

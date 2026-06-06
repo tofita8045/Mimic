@@ -23,6 +23,10 @@ from genlayer import *
 WIN_DELTA: int = 10
 LOSS_DELTA: int = 5
 
+# Entry fee per round = 0.0001 GEN (in wei). Small enough to grind, real enough
+# to make every guess cost something.
+ENTRY_FEE_WEI: int = 10**14
+
 # AI-sentence length bounds (frontend renders the result, so cap to a sane size).
 MIN_AI_LEN: int = 5
 MAX_AI_LEN: int = 280
@@ -66,24 +70,30 @@ class Mimic(gl.Contract):
 
     # Global stats.
     total_rounds: u256
+    total_fees_wei: u256
 
     # ---- Constructor ------------------------------------------------------
 
     def __init__(self) -> None:
         self.total_rounds = u256(0)
+        self.total_fees_wei = u256(0)
 
     # ---- Begin a new round (LLM picks the secret persona) ----------------
 
-    @gl.public.write
+    @gl.public.write.payable
     def start_round(self, seed: str) -> None:
-        """Pick a secret persona and the sentence to show, using Optimistic Democracy.
+        """Pay the entry fee, then pick a secret persona and the sentence to show.
 
         The leader asks the LLM for a JSON {persona, index, ai_sentence}; validators
         independently re-run the prompt and accept the leader's verdict only when
         their persona matches. The sentence is chosen deterministically from
         HUMAN_BANK[index] (for "human") or from the LLM's ai_sentence (for "ai").
         """
+        if int(gl.message.value) < ENTRY_FEE_WEI:
+            raise gl.vm.UserError(f"Entry fee is {ENTRY_FEE_WEI} wei (0.0001 GEN)")
+
         sender = gl.message.sender_address
+        self.total_fees_wei = u256(int(self.total_fees_wei) + int(gl.message.value))
 
         # Register first-time players for the leaderboard.
         if int(self.wins.get(sender, u256(0))) == 0 and int(self.losses.get(sender, u256(0))) == 0 and self.secret.get(sender, "") == "":
@@ -241,6 +251,14 @@ Output strictly compact JSON, nothing else.
     @gl.public.view
     def get_total_rounds(self) -> int:
         return int(self.total_rounds)
+
+    @gl.public.view
+    def get_entry_fee(self) -> int:
+        return ENTRY_FEE_WEI
+
+    @gl.public.view
+    def get_total_fees(self) -> int:
+        return int(self.total_fees_wei)
 
     @gl.public.view
     def get_player_count(self) -> int:
