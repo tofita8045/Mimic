@@ -667,3 +667,10 @@ button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
   justify-content: center;
 }
 .result-actions .cta { width: 100%; max-width: 320px; }
+
+
+.wallet .faucet {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
