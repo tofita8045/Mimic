@@ -501,3 +501,169 @@ button.danger { background: var(--bad); border-color: var(--bad); color: #fff; }
 .wallet-option:hover { background: #fff; border-color: var(--ink); }
 .wallet-option img { border-radius: 6px; }
 .wallet-fallback { font-size: 20px; }
+
+
+/* ===== Chat game (humanornot-style) ====================================== */
+.chat-card {
+  max-width: 520px;
+  margin: 22px auto 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.chat-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: var(--ink);
+  color: #fff8ef;
+}
+.chat-id { display: flex; align-items: center; gap: 10px; font-weight: 700; }
+.chat-av {
+  width: 30px; height: 30px;
+  display: grid; place-items: center;
+  background: linear-gradient(135deg, #ff5a1f, #ffb37a);
+  border-radius: 50%;
+  font-size: 15px;
+}
+.chat-timer {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.chat-timer.danger { background: rgba(208, 50, 26, 0.85); }
+.chat-timer.done { opacity: 0.6; }
+
+.chat-body {
+  padding: 18px;
+  min-height: 300px;
+  max-height: 440px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background:
+    linear-gradient(180deg, #fbf7f0 0%, var(--surface) 100%);
+}
+.chat-hint {
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  margin: 4px 0;
+}
+
+.chat-line { display: flex; align-items: flex-end; gap: 8px; }
+.chat-line.you { justify-content: flex-end; }
+.chat-line.them { justify-content: flex-start; }
+.chat-bubble {
+  max-width: 74%;
+  padding: 10px 14px;
+  border-radius: 18px;
+  font-size: 14.5px;
+  line-height: 1.4;
+  word-wrap: break-word;
+}
+.chat-line.you .chat-bubble {
+  background: #1f9d55;
+  color: #fff;
+  border-bottom-right-radius: 6px;
+}
+.chat-line.them .chat-bubble {
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 6px;
+}
+.bot-ic, .you-ic { font-size: 18px; }
+
+.chat-bubble.typing { display: inline-flex; gap: 4px; align-items: center; }
+.chat-bubble.typing span {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--muted);
+  display: inline-block;
+  animation: blink 1.2s infinite both;
+}
+.chat-bubble.typing .dot2 { animation-delay: 0.2s; }
+.chat-bubble.typing .dot3 { animation-delay: 0.4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+
+.chat-compose {
+  display: flex;
+  gap: 10px;
+  padding: 14px 18px 6px;
+}
+.chat-input {
+  flex: 1;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 12px 16px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--ink);
+}
+.chat-input:focus { outline: none; border-color: var(--ink); }
+.chat-send {
+  width: 46px;
+  border-radius: 50%;
+  background: #1f9d55;
+  border-color: #1f9d55;
+  color: #fff;
+  font-size: 16px;
+}
+.chat-meta {
+  text-align: center;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 0 18px 10px;
+}
+
+.chat-card .guess-row {
+  padding: 0 18px 18px;
+  margin-top: 4px;
+}
+
+/* ----- Verdict (result screen) ------------------------------------------- */
+.verdict {
+  text-align: center;
+  padding: 18px 14px 6px;
+}
+.verdict-line { font-size: 15px; margin-bottom: 12px; }
+.verdict.win .verdict-line { color: var(--good); }
+.verdict.lose .verdict-line { color: var(--bad); }
+.verdict-face {
+  width: 88px; height: 88px;
+  margin: 0 auto 8px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 44px;
+}
+.verdict-face.win { background: var(--good-soft); }
+.verdict-face.lose { background: var(--bad-soft); }
+.verdict-score { font-weight: 800; font-size: 18px; margin-bottom: 10px; }
+.verdict.win .verdict-score { color: var(--good); }
+.verdict.lose .verdict-score { color: var(--bad); }
+.verdict-why {
+  max-width: 420px;
+  margin: 0 auto;
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.result-actions {
+  padding: 12px 18px 20px;
+  display: flex;
+  justify-content: center;
+}
+.result-actions .cta { width: 100%; max-width: 320px; }

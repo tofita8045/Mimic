@@ -16,13 +16,14 @@ import {
   getMyRound,
   getScore,
   makeGuess,
+  sendMessage,
   startRound,
 } from "./contract";
 import WalletBar from "./components/WalletBar";
 import WalletPicker from "./components/WalletPicker";
 import Hero from "./components/Hero";
-import RoundScreen from "./components/RoundScreen";
-import ResultCard from "./components/ResultCard";
+import ChatScreen from "./components/ChatScreen";
+import ResultScreen from "./components/ResultScreen";
 import Leaderboard from "./components/Leaderboard";
 
 export default function App() {
@@ -34,21 +35,25 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
   const [picker, setPicker] = useState<DetectedWallet[] | null>(null);
 
+  // "idle" | "playing" | "result" — controls which screen shows.
+  // The result screen persists until the player explicitly starts a New Game.
+  const [view, setView] = useState<"idle" | "playing" | "result">("idle");
+
   const clientRef = useRef<ReturnType<typeof makeClient> | null>(null);
   const readClientRef = useRef<ReturnType<typeof makeReadClient> | null>(null);
   if (!readClientRef.current) readClientRef.current = makeReadClient();
 
-  const refresh = useCallback(async () => {
-    const readClient = readClientRef.current!;
-    // Leaderboard is public — always show it, even before connecting.
+  const refreshLeaderboard = useCallback(async () => {
     try {
-      setBoard(await getLeaderboard(readClient));
+      setBoard(await getLeaderboard(readClientRef.current!));
     } catch (e) {
       console.warn("leaderboard read failed", e);
     }
+  }, []);
 
+  const refreshMe = useCallback(async () => {
     const client = clientRef.current;
-    if (!client || !account) return;
+    if (!client || !account) return null;
     try {
       const [r, sc] = await Promise.all([
         getMyRound(client, account),
@@ -56,24 +61,34 @@ export default function App() {
       ]);
       setRound(r);
       setScore(sc);
+      return r;
     } catch (e) {
       console.warn("read failed", e);
+      return null;
     }
   }, [account]);
 
   useEffect(() => {
-    refresh();
-    const id = window.setInterval(refresh, 6000);
+    refreshLeaderboard();
+    const id = window.setInterval(refreshLeaderboard, 8000);
     return () => window.clearInterval(id);
-  }, [refresh]);
+  }, [refreshLeaderboard]);
+
+  // When a wallet connects, hydrate the player's current round once.
+  useEffect(() => {
+    if (!account) return;
+    (async () => {
+      const r = await refreshMe();
+      if (r?.active && !r.resolved) setView("playing");
+      else if (r?.active && r.resolved) setView("result");
+      else setView("idle");
+    })();
+  }, [account, refreshMe]);
 
   async function openConnect() {
     setError(null);
     const wallets = await discoverWallets();
-    if (wallets.length === 1) {
-      await connectTo(wallets[0]);
-      return;
-    }
+    if (wallets.length === 1) return connectTo(wallets[0]);
     setPicker(wallets);
   }
 
@@ -82,10 +97,8 @@ export default function App() {
     setError(null);
     try {
       const address = await requestAccounts(w.provider);
-      const client = makeClient(w.provider, address);
-      clientRef.current = client;
+      clientRef.current = makeClient(w.provider, address);
       setAccount(address);
-      // Track account switches in the wallet.
       w.provider.on?.("accountsChanged", (accs: string[]) => {
         if (!accs || accs.length === 0) {
           setAccount(null);
@@ -123,65 +136,75 @@ export default function App() {
 
   async function handleStart() {
     if (!clientRef.current || !account) return;
-    const seed = account.slice(2, 10);
-    await withBusy(async () => {
+    const seed = account.slice(2, 10) + Date.now().toString(36);
+    setView("playing");
+    setRound({ active: true, resolved: false, messages: [], msgCount: 0, maxMessages: 6, guess: "", persona: "", correct: false });
+    const ok = await withBusy(async () => {
       await startRound(clientRef.current!, seed);
-      await refresh();
+      await refreshMe();
+      return true;
+    });
+    if (!ok) setView("idle");
+  }
+
+  async function handleSend(text: string) {
+    if (!clientRef.current) return;
+    await withBusy(async () => {
+      await sendMessage(clientRef.current!, text);
+      await refreshMe();
     });
   }
 
   async function handleGuess(g: "human" | "ai") {
     if (!clientRef.current) return;
-    await withBusy(async () => {
+    const r = await withBusy(async () => {
       await makeGuess(clientRef.current!, g);
-      await refresh();
+      const updated = await refreshMe();
+      await refreshLeaderboard();
+      return updated;
     });
+    if (r?.resolved) setView("result");
+  }
+
+  function handleNewGame() {
+    setRound(null);
+    setView("idle");
+    handleStart();
   }
 
   const connected = !!account;
-  const inActiveRound = !!round?.active && !round.resolved;
-  const ctaLabel = !connected
-    ? "Connect wallet to play"
-    : busy
-      ? "Working…"
-      : round?.resolved
-        ? "Play again (0.0001 GEN)"
-        : "Play a round (0.0001 GEN)";
-
-  function heroAction() {
-    if (!connected) return openConnect();
-    return handleStart();
-  }
+  const showHero = view === "idle";
 
   return (
     <div className="app">
       <WalletBar address={account} score={score} onConnect={openConnect} />
 
-      {!inActiveRound && <Hero onStart={heroAction} busy={busy} ctaLabel={ctaLabel} />}
+      {showHero && (
+        <Hero
+          onStart={connected ? handleStart : openConnect}
+          busy={busy}
+          ctaLabel={connected ? "Play a round (0.0001 GEN)" : "Connect wallet to play"}
+        />
+      )}
 
       {error && <div className="error">{error}</div>}
 
-      {connected && inActiveRound && (
-        <RoundScreen round={round} busy={busy} onGuess={handleGuess} />
+      {connected && view === "playing" && round && (
+        <ChatScreen round={round} busy={busy} onSend={handleSend} onGuess={handleGuess} />
       )}
 
-      {connected && (
-        <ResultCard round={round} onPlayAgain={handleStart} busy={busy} />
+      {connected && view === "result" && round && (
+        <ResultScreen round={round} busy={busy} onNewGame={handleNewGame} />
       )}
 
       <Leaderboard rows={board} me={account} />
 
       <div className="foot">
-        Mimic · built on GenLayer · Intelligent Contract in Python · genlayer-js · connect
-        MetaMask, OKX, Rabby, or any wallet
+        Mimic · built on GenLayer · Intelligent Contract in Python · genlayer-js
       </div>
 
       {picker && (
-        <WalletPicker
-          wallets={picker}
-          onPick={connectTo}
-          onClose={() => setPicker(null)}
-        />
+        <WalletPicker wallets={picker} onPick={connectTo} onClose={() => setPicker(null)} />
       )}
     </div>
   );

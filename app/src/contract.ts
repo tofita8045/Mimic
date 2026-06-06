@@ -1,22 +1,29 @@
-// Typed wrappers around the Mimic Intelligent Contract.
+// Typed wrappers around the Mimic chat Intelligent Contract.
 import type { GenLayerClient } from "genlayer-js/types";
 import { TransactionStatus } from "./genlayer";
 
-// The deployed Mimic contract on GenLayer Studionet.
-export const CONTRACT_ADDRESS = "0xE7B778a52d0891549A3105d1633F1087d351afa5" as const;
+// The deployed Mimic (chat) contract on GenLayer Studionet.
+export const CONTRACT_ADDRESS = "0xddFCFFFA5C5f86A2fD94f1dc917edC22838942c3" as const;
 
 // Entry fee per round: 0.0001 GEN, in wei (must match ENTRY_FEE_WEI in mimic.py).
-export const ENTRY_FEE_WEI = 100000000000000n; // 1e14
+export const ENTRY_FEE_WEI = 100000000000000n;
 
 export type Address = `0x${string}`;
 
+export interface ChatMessage {
+  role: "you" | "them";
+  text: string;
+}
+
 export interface RoundView {
   active: boolean;
-  sentence?: string;
-  resolved?: boolean;
-  correct?: boolean;
-  guess?: string;
-  persona?: string;
+  resolved: boolean;
+  messages: ChatMessage[];
+  msgCount: number;
+  maxMessages: number;
+  guess: string;
+  persona: string; // "" until resolved
+  correct: boolean;
 }
 
 export interface LeaderboardRow {
@@ -44,7 +51,6 @@ function toBool(v: unknown): boolean {
 
 const ADDR = CONTRACT_ADDRESS as Address;
 
-/** Switch the wallet to Studionet (required before signing with a real wallet). */
 export async function ensureNetwork(client: GenLayerClient<any>): Promise<void> {
   await client.connect("studionet");
 }
@@ -62,18 +68,20 @@ async function writeAndWait(
     args: args as any,
     value,
   });
-  // LLM consensus can take a while — wait generously.
   await client.waitForTransactionReceipt({
     hash,
     status: TransactionStatus.ACCEPTED,
-    retries: 300,
+    retries: 400,
     interval: 5000,
   });
 }
 
 export async function startRound(client: GenLayerClient<any>, seed: string) {
-  // Pays the entry fee.
   return writeAndWait(client, "start_round", [seed], ENTRY_FEE_WEI);
+}
+
+export async function sendMessage(client: GenLayerClient<any>, text: string) {
+  return writeAndWait(client, "send_message", [text], 0n);
 }
 
 export async function makeGuess(client: GenLayerClient<any>, guess: "human" | "ai") {
@@ -88,22 +96,40 @@ async function readView(
   return client.readContract({ address: ADDR, functionName, args: args as any });
 }
 
+function parseTranscript(raw: unknown): ChatMessage[] {
+  if (typeof raw !== "string") return [];
+  try {
+    const arr = JSON.parse(raw);
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((m) => m && (m.role === "you" || m.role === "them") && typeof m.text === "string")
+      .map((m) => ({ role: m.role, text: m.text }));
+  } catch {
+    return [];
+  }
+}
+
 export async function getMyRound(
   client: GenLayerClient<any>,
   player: Address,
 ): Promise<RoundView> {
-  const [active, resolved, sentence, persona, guess, correct] = await Promise.all([
-    readView(client, "get_active", [player]),
-    readView(client, "get_resolved", [player]),
-    readView(client, "get_sentence", [player]),
-    readView(client, "get_persona_revealed", [player]),
-    readView(client, "get_guess", [player]),
-    readView(client, "get_correct", [player]),
-  ]);
+  const [active, resolved, transcript, msgCount, maxMessages, persona, guess, correct] =
+    await Promise.all([
+      readView(client, "get_active", [player]),
+      readView(client, "get_resolved", [player]),
+      readView(client, "get_transcript", [player]),
+      readView(client, "get_msg_count", [player]),
+      readView(client, "get_max_messages", []),
+      readView(client, "get_persona_revealed", [player]),
+      readView(client, "get_guess", [player]),
+      readView(client, "get_correct", [player]),
+    ]);
   return {
     active: toBool(active),
     resolved: toBool(resolved),
-    sentence: typeof sentence === "string" ? sentence : "",
+    messages: parseTranscript(transcript),
+    msgCount: toNumber(msgCount),
+    maxMessages: toNumber(maxMessages) || 6,
     persona: typeof persona === "string" ? persona : "",
     guess: typeof guess === "string" ? guess : "",
     correct: toBool(correct),
